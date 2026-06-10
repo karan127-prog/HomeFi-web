@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Forecast{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Expense Forecast</div>
+  <div class="page-subtitle">Next month prediction using NumPy linear regression</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;" id="forecast-cards">
+  <div class="card"><p style="color:var(--muted);">Loading...</p></div>
+  <div class="card"></div>
+  <div class="card"></div>
+</div>
+
+<div class="card">
+  <div class="section-title">Actual vs Trend vs Forecast</div>
+  <div style="position:relative;height:320px;"><canvas id="forecastChart"></canvas></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+fetch('/api/forecast').then(r=>r.json()).then(d => {
+  const months    = d.months     || [];
+  const values    = d.values     || [];
+  const trendLine = d.trend_line || [];
+  const predicted = d.predicted  || 0;
+  const trend     = d.trend      || 'stable';
+
+  const trendColor = trend === 'increasing' ? '#e05260' : trend === 'decreasing' ? '#00d4aa' : '#f5a623';
+  const trendIcon  = trend === 'increasing' ? '↑ Increasing' : trend === 'decreasing' ? '↓ Decreasing' : '→ Stable';
+
+  document.getElementById('forecast-cards').innerHTML = `
+    <div class="card">
+      <div class="card-title">Next Month Predicted</div>
+      <div style="font-family:'Space Mono',monospace;font-size:1.5rem;font-weight:700;color:#7c6df0;margin:8px 0;">₹${Math.round(predicted).toLocaleString('en-IN')}</div>
+      <div style="color:var(--muted);font-size:0.8rem;">based on ${months.length} months of data</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Trend Direction</div>
+      <div style="font-family:'Space Mono',monospace;font-size:1.2rem;font-weight:700;color:${trendColor};margin:8px 0;">${trendIcon}</div>
+      <div style="color:var(--muted);font-size:0.8rem;">linear regression slope</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Confidence Range</div>
+      <div style="font-family:'Space Mono',monospace;font-size:0.95rem;font-weight:700;color:#f5a623;margin:8px 0;">₹${Math.round(predicted*0.9).toLocaleString('en-IN')} – ₹${Math.round(predicted*1.1).toLocaleString('en-IN')}</div>
+      <div style="color:var(--muted);font-size:0.8rem;">±10% confidence band</div>
+    </div>
+  `;
+
+  const allLabels    = [...months, 'Next Month'];
+  const actualData   = [...values, null];
+  const trendData    = trendLine;
+  const forecastDots = [...Array(months.length).fill(null), predicted];
+
+  new Chart(document.getElementById('forecastChart'), {
+    type: 'line',
+    data: {
+      labels: allLabels,
+      datasets: [
+        { label:'Actual',     data: actualData,   borderColor:'#00d4aa', backgroundColor:'rgba(0,212,170,0.1)', fill:true, tension:0.3, pointRadius:5, pointBackgroundColor:'#00d4aa' },
+        { label:'Trend Line', data: trendData,    borderColor:'rgba(245,166,35,0.5)', borderDash:[4,3], pointRadius:0, fill:false, tension:0 },
+        { label:'Forecast',   data: forecastDots, borderColor:'#e05260', backgroundColor:'rgba(224,82,96,0.3)', pointRadius:[...Array(months.length).fill(0),10], pointBackgroundColor:'#e05260', fill:false }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{ labels:{ font:{size:11}, boxWidth:12 } } },
+      scales: {
+        x: { grid:{color:'#252830'} },
+        y: { grid:{color:'#252830'}, ticks:{ callback: v => '₹'+(v/1000).toFixed(0)+'k' } }
+      }
+    }
+  });
+}).catch(() => {
+  document.getElementById('forecast-cards').innerHTML = '<div class="card"><p style="color:var(--danger);">Error loading data. Add more months of data for forecast.</p></div>';
+});
+</script>
+{% endblock %}

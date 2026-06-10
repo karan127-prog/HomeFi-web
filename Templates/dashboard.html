@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<!-- STAT CARDS -->
+<div class="stats-grid">
+  <div class="stat-card income">
+    <div class="stat-label">Total Income</div>
+    <div class="stat-value">Rs.{{ "{:,.0f}".format(summary.total_income) }}</div>
+    <div class="stat-sub">All time</div>
+  </div>
+  <div class="stat-card expense">
+    <div class="stat-label">Total Expenses</div>
+    <div class="stat-value">Rs.{{ "{:,.0f}".format(summary.total_expense) }}</div>
+    <div class="stat-sub">All time</div>
+  </div>
+  <div class="stat-card savings">
+    <div class="stat-label">Net Savings</div>
+    <div class="stat-value">Rs.{{ "{:,.0f}".format(summary.net_savings) }}</div>
+    <div class="stat-sub">Income - Expenses</div>
+  </div>
+  <div class="stat-card rate">
+    <div class="stat-label">Savings Rate</div>
+    <div class="stat-value">{{ summary.savings_rate }}%</div>
+    <div class="stat-sub">
+      {% if summary.savings_rate >= 30 %}Excellent!
+      {% elif summary.savings_rate >= 20 %}Good
+      {% elif summary.savings_rate >= 10 %}Average
+      {% else %}Needs work
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div style="margin-bottom:20px;display:flex;gap:10px;">
+    <a href="/download-pdf" class="btn">📄 Export PDF</a>
+    <a href="/download-excel" class="btn">📊 Export Excel</a>
+</div>
+
+<!-- CHARTS ROW -->
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Income vs Expense vs Savings</div>
+    <div class="chart-wrap">
+      <canvas id="lineChart"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Spending by Category</div>
+    <div class="chart-wrap">
+      <canvas id="donutChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- RECENT TRANSACTIONS -->
+<div class="card">
+  <div class="card-title">Recent Transactions</div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Category</th>
+        <th>Description</th>
+        <th>Type</th>
+        <th style="text-align:right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in recent %}
+      <tr>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">{{ row.date }}</td>
+        <td><span class="badge badge-blue">{{ row.category }}</span></td>
+        <td style="color:var(--muted)">{{ row.description }}</td>
+        <td>
+          {% if row.type == 'income' %}
+            <span class="badge badge-green">Income</span>
+          {% else %}
+            <span class="badge badge-red">Expense</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:600;
+          color:{% if row.type=='income' %}var(--green){% else %}var(--red){% endif %}">
+          Rs.{{ "{:,.0f}".format(row.amount) }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+const months   = {{ months|safe }};
+const incomes  = {{ incomes|safe }};
+const expenses = {{ expenses|safe }};
+const savings  = {{ savings|safe }};
+const catNames = {{ cat_names|safe }};
+const catAmt   = {{ cat_amounts|safe }};
+
+const ctxLine = document.getElementById("lineChart").getContext("2d");
+new Chart(ctxLine, {
+  type: "line",
+  data: {
+    labels: months,
+    datasets: [
+      { label: "Income",  data: incomes,  borderColor: "#69f0ae", backgroundColor: "rgba(105,240,174,0.08)", tension: 0.4, pointRadius: 5, pointHoverRadius: 7 },
+      { label: "Expense", data: expenses, borderColor: "#ff5370", backgroundColor: "rgba(255,83,112,0.08)",  tension: 0.4, pointRadius: 5, pointHoverRadius: 7 },
+      { label: "Savings", data: savings,  borderColor: "#4fc3f7", backgroundColor: "rgba(79,195,247,0.08)",  tension: 0.4, pointRadius: 5, pointHoverRadius: 7, borderDash: [5,3] }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: "#e8eaf6", font: { family: "Space Grotesk" } } } },
+    scales: {
+      x: { ticks: { color: "#7986cb" }, grid: { color: "#252540" } },
+      y: { ticks: { color: "#7986cb", callback: v => "Rs." + (v/1000).toFixed(0) + "k" }, grid: { color: "#252540" } }
+    }
+  }
+});
+
+const ctxDonut = document.getElementById("donutChart").getContext("2d");
+const palette  = ["#4fc3f7","#69f0ae","#ff5370","#ffd740","#b388ff","#ff8a65","#80cbc4","#f48fb1","#dce775","#81d4fa","#ce93d8"];
+new Chart(ctxDonut, {
+  type: "doughnut",
+  data: {
+    labels: catNames,
+    datasets: [{ data: catAmt, backgroundColor: palette, borderColor: "#1a1a2e", borderWidth: 2 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: "right", labels: { color: "#e8eaf6", font: { family: "Space Grotesk", size: 11 }, padding: 12 } },
+      tooltip: { callbacks: { label: ctx => ` Rs.${ctx.parsed.toLocaleString()}` } }
+    },
+    cutout: "65%"
+  }
+});
+</script>
+{% endblock %}

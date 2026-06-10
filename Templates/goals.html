@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Goals{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Savings Goals</div>
+  <div class="page-subtitle">Track your targets and estimated time to reach them</div>
+</div>
+
+<div id="goals-container">
+  <p style="color:var(--muted);padding:20px;">Loading...</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+fetch('/api/goals').then(r=>r.json()).then(goals => {
+  const el = document.getElementById('goals-container');
+
+  if (!goals || goals.length === 0) {
+    el.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px;">
+        <p style="color:var(--muted);margin-bottom:12px;">No goals found.</p>
+        <p style="color:var(--muted);font-size:0.8rem;">Create a <code>Data/goals.json</code> file to track goals.</p>
+        <p style="color:var(--muted);font-size:0.75rem;margin-top:8px;">Example:<br><code>[{"name":"Laptop","target":50000,"current_savings":10000,"priority":"High"}]</code></p>
+      </div>`;
+    return;
+  }
+
+  const priorityColor = { High:'#e05260', Medium:'#f5a623', Low:'#00d4aa' };
+
+  let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">';
+  goals.forEach(g => {
+    const pct   = Math.min(100, g.pct || 0);
+    const pColor = priorityColor[g.priority] || '#7c6df0';
+    const rem   = (g.target - g.saved).toLocaleString('en-IN');
+    html += `
+    <div class="card" style="border-top:3px solid ${pColor};">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <div style="font-weight:600;font-size:1rem;">${g.name}</div>
+          <div style="color:var(--muted);font-size:0.75rem;margin-top:2px;">${g.priority} Priority</div>
+        </div>
+        <span style="background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:99px;padding:2px 10px;font-size:0.75rem;">${pct.toFixed(1)}%</span>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:1.2rem;color:${pColor};margin-bottom:6px;">
+        ₹${g.saved.toLocaleString('en-IN')}
+        <span style="color:var(--muted);font-size:0.8rem;"> / ₹${g.target.toLocaleString('en-IN')}</span>
+      </div>
+      <div style="background:var(--bg3);border-radius:99px;height:7px;overflow:hidden;margin:10px 0;">
+        <div style="height:100%;border-radius:99px;background:${pColor};width:${pct}%;transition:width 0.8s ease;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--muted);">
+        <span>₹${rem} remaining</span>
+        <span>ETA: ${g.eta}</span>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}).catch(() => {
+  document.getElementById('goals-container').innerHTML = '<div class="card"><p style="color:var(--danger);padding:20px;">Error loading goals.</p></div>';
+});
+</script>
+{% endblock %}

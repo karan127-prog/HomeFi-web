@@ -1,0 +1,192 @@
+/* ─────────────────────────────────────────
+   HomeFi Web App — style.css
+   Extra styles beyond base.html inline CSS
+───────────────────────────────────────── */
+
+/* ── ANIMATIONS ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes countUp {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+.content > * {
+  animation: fadeIn 0.35s ease forwards;
+}
+
+/* ── STAT CARD HOVER GLOW ── */
+.stat-card.income:hover  { box-shadow: 0 0 20px rgba(105,240,174,0.15); }
+.stat-card.expense:hover { box-shadow: 0 0 20px rgba(255,83,112,0.15); }
+.stat-card.savings:hover { box-shadow: 0 0 20px rgba(79,195,247,0.15); }
+.stat-card.rate:hover    { box-shadow: 0 0 20px rgba(255,215,64,0.15); }
+
+/* ── CARD HOVER ── */
+.card {
+  transition: box-shadow 0.2s ease;
+}
+.card:hover {
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+}
+
+/* ── SIDEBAR ACTIVE GLOW ── */
+.nav-link.active {
+  box-shadow: inset 0 0 12px rgba(79,195,247,0.08);
+}
+
+/* ── TABLE ROW HOVER ── */
+.data-table tbody tr {
+  transition: background 0.15s ease;
+  cursor: default;
+}
+
+/* ── PROGRESS BAR ANIMATION ── */
+.progress-fill {
+  animation: growBar 0.8s ease forwards;
+}
+
+@keyframes growBar {
+  from { width: 0% !important; }
+}
+
+/* ── BADGE STYLES ── */
+.badge {
+  letter-spacing: 0.3px;
+  transition: opacity 0.2s;
+}
+.badge:hover { opacity: 0.8; }
+
+/* ── SCROLLBAR (Windows) ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #252540 #13131f;
+}
+
+/* ── FORM FOCUS GLOW ── */
+.form-input:focus,
+.form-select:focus {
+  box-shadow: 0 0 0 3px rgba(79,195,247,0.12);
+}
+
+/* ── BUTTON ACTIVE ── */
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+/* ── TOPBAR SHADOW ── */
+.topbar {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+
+/* ── LOADING STATE ── */
+.loading {
+  animation: pulse 1.5s infinite;
+  pointer-events: none;
+}
+
+/* ── CHART CONTAINER ── */
+.chart-wrap {
+  padding: 8px 0;
+}
+
+/* ── RESPONSIVE: hide sidebar on small screens ── */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 60px;
+    overflow: hidden;
+  }
+  .sidebar .nav-link span:last-child,
+  .sidebar-brand .tagline,
+  .sidebar-brand .logo,
+  .sidebar-footer,
+  .nav-label {
+    display: none;
+  }
+  .main {
+    margin-left: 60px;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .content {
+    padding: 16px;
+  }
+}
+
+/* ── GOALS CARD ── */
+.goal-card-wrap {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.goal-card-wrap:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+
+/* ── RECOMMENDATION CARDS ── */
+.rec-card {
+  transition: transform 0.15s ease;
+}
+.rec-card:hover {
+  transform: translateX(4px);
+}
+
+/* ── NUMBER FONT ── */
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── SECTION DIVIDER ── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.empty-state .icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  display: block;
+}
+.btn{
+    background:#00d4aa;
+    color:white;
+    padding:12px 20px;
+    border-radius:8px;
+    text-decoration:none;
+    font-weight:600;
+}
+
+.btn:hover{
+    opacity:.9;
+}
+.btn{
+    background:#00d4aa;
+    color:white;
+    padding:12px 20px;
+    border-radius:8px;
+    text-decoration:none;
+    font-weight:600;
+    display:inline-block;
+}
+
+.btn:hover{
+    opacity:.9;
+}

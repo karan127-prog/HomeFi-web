@@ -1,0 +1,8 @@
+[
+  {
+    "name": "Smartphone",
+    "target": 20000,
+    "current_savings": 0,
+    "priority": "Low"
+  }
+]

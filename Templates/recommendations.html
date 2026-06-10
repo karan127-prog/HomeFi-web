@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Tips{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Smart Tips</div>
+  <div class="page-subtitle">Personalized recommendations based on your spending data</div>
+</div>
+
+<div id="tips-container">
+  <p style="color:var(--muted);padding:20px;">Loading...</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Build tips directly from trends + categories API (no separate /api/recommendations needed)
+Promise.all([
+  fetch('/api/trends').then(r=>r.json()),
+  fetch('/api/categories').then(r=>r.json()),
+  fetch('/api/forecast').then(r=>r.json())
+]).then(([trends, cats, forecast]) => {
+  const el   = document.getElementById('tips-container');
+  const tips = [];
+
+  // Income & savings analysis
+  const income  = trends.income  || [];
+  const expense = trends.expense || [];
+  const savings = trends.savings || [];
+  const totalInc = income.reduce((a,b)=>a+b,0);
+  const totalExp = expense.reduce((a,b)=>a+b,0);
+  const totalSav = savings.reduce((a,b)=>a+b,0);
+  const savRate  = totalInc > 0 ? (totalSav/totalInc*100) : 0;
+
+  if (savRate >= 30) {
+    tips.push({ level:'success', title:'Excellent Savings Rate 🎉', msg:`You're saving ${savRate.toFixed(1)}% of your income. That's above the recommended 20%. Keep it up!` });
+  } else if (savRate >= 20) {
+    tips.push({ level:'good', title:'Good Savings Rate ✅', msg:`Savings rate is ${savRate.toFixed(1)}% — right on target! Consider investing the surplus for long-term growth.` });
+  } else if (savRate >= 10) {
+    tips.push({ level:'warn', title:'Savings Rate Below Target ⚠️', msg:`Savings rate is ${savRate.toFixed(1)}%. Target is 20%+. Try reducing discretionary spend by ₹${Math.round((totalExp*0.1)/income.length).toLocaleString('en-IN')}/month.` });
+  } else {
+    tips.push({ level:'danger', title:'Low Savings Rate 🔴', msg:`Only saving ${savRate.toFixed(1)}% of income. Aim for at least 20%. Review your largest expense categories and find areas to cut.` });
+  }
+
+  // Category-wise tips
+  const labels  = cats.labels || [];
+  const values  = cats.values || [];
+  const catTotal = values.reduce((a,b)=>a+b,0);
+  const thresholds = { Food:30, Entertainment:10, Shopping:15, Travel:10 };
+
+  labels.forEach((cat, i) => {
+    const pct   = catTotal > 0 ? (values[i]/catTotal*100) : 0;
+    const limit = thresholds[cat];
+    if (limit && pct > limit) {
+      tips.push({ level:'warn', title:`High ${cat} Spending ⚠️`, msg:`${cat} is ${pct.toFixed(1)}% of expenses (limit: ${limit}%). You're spending ₹${Math.round(values[i]).toLocaleString('en-IN')} total. Try to bring it under ${limit}%.` });
+    }
+  });
+
+  // Forecast tip
+  const trend = forecast.trend || 'stable';
+  if (trend === 'increasing') {
+    tips.push({ level:'warn', title:'Expenses Are Increasing 📈', msg:`Your spending is trending upward. Next month predicted: ₹${Math.round(forecast.predicted||0).toLocaleString('en-IN')}. Review recurring expenses and set stricter limits.` });
+  } else if (trend === 'decreasing') {
+    tips.push({ level:'success', title:'Expenses Are Decreasing 📉', msg:`Great news — your spending trend is downward. Next month predicted: ₹${Math.round(forecast.predicted||0).toLocaleString('en-IN')}. Keep up the discipline!` });
+  } else {
+    tips.push({ level:'info', title:'Expenses Are Stable →', msg:`Your spending is consistent month-over-month. Predicted next month: ₹${Math.round(forecast.predicted||0).toLocaleString('en-IN')}.` });
+  }
+
+  // 50-30-20 rule
+  const needsCats  = ['Rent','Food','Utilities','Healthcare','EMI'];
+  const wantsCats  = ['Entertainment','Shopping','Travel'];
+  let needsTotal = 0, wantsTotal = 0;
+  labels.forEach((c, i) => {
+    if (needsCats.includes(c)) needsTotal += values[i];
+    if (wantsCats.includes(c)) wantsTotal += values[i];
+  });
+  const needsPct = catTotal > 0 ? (needsTotal/catTotal*100) : 0;
+  const wantsPct = catTotal > 0 ? (wantsTotal/catTotal*100) : 0;
+  tips.push({ level:'info', title:'50-30-20 Rule Check 📊', msg:`Needs: ${needsPct.toFixed(0)}% (ideal ≤50%) | Wants: ${wantsPct.toFixed(0)}% (ideal ≤30%) | Savings: ${savRate.toFixed(0)}% (ideal ≥20%). ${needsPct<=50&&wantsPct<=30&&savRate>=20?'You\'re within ideal range! ✅':'Adjust spending allocation to hit the 50-30-20 targets.'}` });
+
+  // Render
+  const colors = { success:'#00d4aa', good:'#00d4aa', warn:'#f5a623', danger:'#e05260', info:'#7c6df0' };
+  const icons  = { success:'🟢', good:'✅', warn:'⚠️', danger:'🔴', info:'💡' };
+
+  let html = '<div style="display:flex;flex-direction:column;gap:14px;">';
+  tips.forEach(t => {
+    const c = colors[t.level] || '#7c6df0';
+    html += `
+    <div class="card" style="border-left:3px solid ${c};display:flex;gap:14px;align-items:flex-start;">
+      <div style="font-size:1.4rem;padding-top:2px;">${icons[t.level]||'💡'}</div>
+      <div>
+        <div style="font-weight:600;margin-bottom:5px;">${t.title}</div>
+        <div style="color:var(--muted);font-size:0.875rem;line-height:1.6;">${t.msg}</div>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}).catch(() => {
+  document.getElementById('tips-container').innerHTML = '<div class="card"><p style="color:var(--danger);padding:20px;">Error loading recommendations.</p></div>';
+});
+</script>
+{% endblock %}
