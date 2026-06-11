@@ -2,8 +2,6 @@
 app.py
 ------
 HomeFi Web — Flask entry point with Supabase database
-Run: python app.py
-Then open: http://127.0.0.1:5000
 """
 
 import os
@@ -17,31 +15,39 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for, s
 from supabase import create_client
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "Modules"))
-from report_generator import generate_report
 from excel_exporter import export_to_excel
 
 app = Flask(__name__)
 
-# ── Supabase config ────────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://mhdhhyynritbuhpurdii.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oZGhoeXlucml0YnVocHVyZGlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNjc0MTUsImV4cCI6MjA5Njc0MzQxNX0.L9ob_H7C9uFql9eIeT6-P9EIkfeRyw7bOmvk0Hm88_g")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-CHARTS_DIR  = "Charts"
-REPORTS_DIR = "Reports"
-os.makedirs(CHARTS_DIR,  exist_ok=True)
-os.makedirs(REPORTS_DIR, exist_ok=True)
+os.makedirs("Charts",  exist_ok=True)
+os.makedirs("Reports", exist_ok=True)
 
 
 def get_df():
-    response = supabase.table("expenses").select("*").execute()
-    data = response.data
+    """Load expenses from Supabase — always returns clean DataFrame with datetime dates"""
+    try:
+        response = supabase.table("expenses").select("*").execute()
+        data = response.data
+    except Exception:
+        data = []
     if not data:
         return pd.DataFrame(columns=["date","category","type","amount","description"])
     df = pd.DataFrame(data)
     df["date"]   = pd.to_datetime(df["date"], errors="coerce")
     df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
     df = df.dropna(subset=["date"])
+    return df
+
+
+def add_month_col(df):
+    """Safely add month period column"""
+    df = df.copy()
+    df["date"]  = pd.to_datetime(df["date"], errors="coerce")
+    df["month"] = df["date"].dt.to_period("M")
     return df
 
 
@@ -54,18 +60,13 @@ def dashboard():
     sav = inc - exp
     rate = round((sav / inc * 100) if inc > 0 else 0, 1)
 
-    exp_df = df[df["type"] == "expense"].copy()
-    exp_df["date"] = pd.to_datetime(exp_df["date"], errors="coerce")
-    exp_df["month"] = exp_df["date"].dt.to_period("M")
-    monthly_exp = exp_df.groupby("month")["amount"].sum()
+    exp_df = add_month_col(df[df["type"] == "expense"])
+    inc_df = add_month_col(df[df["type"] == "income"])
 
-    inc_df = df[df["type"] == "income"].copy()
-    inc_df["date"] = pd.to_datetime(inc_df["date"], errors="coerce")
-    inc_df["month"] = inc_df["date"].dt.to_period("M")
+    monthly_exp = exp_df.groupby("month")["amount"].sum()
     monthly_inc = inc_df.groupby("month")["amount"].sum()
     monthly_sav = monthly_inc.subtract(monthly_exp, fill_value=0)
-
-    all_months = sorted(set(monthly_inc.index) | set(monthly_exp.index))
+    all_months  = sorted(set(monthly_inc.index) | set(monthly_exp.index))
 
     top_cat = (df[df["type"] == "expense"]
                .groupby("category")["amount"].sum()
@@ -84,12 +85,13 @@ def dashboard():
 
     cat = df[df["type"] == "expense"].groupby("category")["amount"].sum().sort_values(ascending=False)
 
+    df_months = add_month_col(df)
     summary = SimpleNamespace(
         total_income  = inc,
         total_expense = exp,
         net_savings   = sav,
         savings_rate  = rate,
-        months        = df["date"].dt.to_period("M").nunique(),
+        months        = df_months["month"].nunique(),
         records       = len(df),
         best_month    = str(monthly_sav.idxmax()) if not monthly_sav.empty else "N/A",
         worst_month   = str(monthly_exp.idxmax()) if not monthly_exp.empty else "N/A",
@@ -110,28 +112,22 @@ def dashboard():
 
 
 @app.route("/categories")
-def categories():
-    return render_template("categories.html")
+def categories():   return render_template("categories.html")
 
 @app.route("/trends")
-def trends():
-    return render_template("trends.html")
+def trends():       return render_template("trends.html")
 
 @app.route("/budget")
-def budget():
-    return render_template("budget.html")
+def budget():       return render_template("budget.html")
 
 @app.route("/forecast")
-def forecast():
-    return render_template("forecast.html")
+def forecast():     return render_template("forecast.html")
 
 @app.route("/goals")
-def goals():
-    return render_template("goals.html")
+def goals():        return render_template("goals.html")
 
 @app.route("/recommendations")
-def recommendations():
-    return render_template("recommendations.html")
+def recommendations(): return render_template("recommendations.html")
 
 
 # ── API routes ─────────────────────────────────────────────────────────────────
@@ -145,8 +141,7 @@ def api_categories():
 @app.route("/api/trends")
 def api_trends():
     df  = get_df()
-    df2 = df.copy()
-    df2["month"] = df2["date"].dt.to_period("M")
+    df2 = add_month_col(df)
     inc    = df2[df2["type"] == "income"].groupby("month")["amount"].sum()
     exp    = df2[df2["type"] == "expense"].groupby("month")["amount"].sum()
     months = sorted(set(inc.index) | set(exp.index))
@@ -161,14 +156,13 @@ def api_trends():
 @app.route("/api/forecast")
 def api_forecast():
     df     = get_df()
-    exp_df = df[df["type"] == "expense"].copy()
-    exp_df["month"] = exp_df["date"].dt.to_period("M")
+    exp_df = add_month_col(df[df["type"] == "expense"])
     monthly = exp_df.groupby("month")["amount"].sum()
     values  = [float(v) for v in monthly.values]
     months  = [str(m) for m in monthly.index]
 
     if len(values) >= 2:
-        x = np.arange(len(values))
+        x          = np.arange(len(values))
         m_s, b     = np.polyfit(x, values, 1)
         predicted  = float(m_s * len(values) + b)
         trend      = "increasing" if m_s > 50 else ("decreasing" if m_s < -50 else "stable")
@@ -203,19 +197,17 @@ def api_goals():
     if not os.path.exists(goals_path):
         return jsonify([])
     with open(goals_path) as f:
-        goals = json.load(f)
+        goals_data = json.load(f)
 
     df     = get_df()
-    exp_df = df[df["type"] == "expense"].copy()
-    exp_df["month"] = exp_df["date"].dt.to_period("M")
-    inc_df = df[df["type"] == "income"].copy()
-    inc_df["month"] = inc_df["date"].dt.to_period("M")
-    monthly_sav = (inc_df.groupby("month")["amount"].sum()
-                   .subtract(exp_df.groupby("month")["amount"].sum(), fill_value=0))
+    df2    = add_month_col(df)
+    inc_m  = df2[df2["type"] == "income"].groupby("month")["amount"].sum()
+    exp_m  = df2[df2["type"] == "expense"].groupby("month")["amount"].sum()
+    monthly_sav = inc_m.subtract(exp_m, fill_value=0)
     avg_sav = float(monthly_sav.mean()) if not monthly_sav.empty else 0
 
     result = []
-    for g in goals:
+    for g in goals_data:
         target    = g.get("target", 0)
         saved     = g.get("current_savings", 0)
         pct       = min(100, (saved / target * 100)) if target > 0 else 0
@@ -225,7 +217,7 @@ def api_goals():
             "target":   target,
             "saved":    saved,
             "pct":      round(pct, 1),
-            "priority": g.get("priority", "medium"),
+            "priority": g.get("priority", "Medium"),
             "eta":      f"{int(remaining / avg_sav)} months" if avg_sav > 0 else "N/A",
         })
     return jsonify(result)
@@ -243,23 +235,16 @@ def add_expense():
         etype = request.form.get("type")
         amt   = float(request.form.get("amount"))
         desc  = request.form.get("description") or cat
-
-        # Save to Supabase
         supabase.table("expenses").insert({
-            "date":        date,
-            "category":    cat,
-            "type":        etype,
-            "amount":      amt,
-            "description": desc
+            "date": date, "category": cat,
+            "type": etype, "amount": amt, "description": desc
         }).execute()
-
         return redirect(url_for("dashboard"))
 
     return render_template("add.html", categories=categories,
                            today=datetime.now().strftime("%Y-%m-%d"))
 
 
-# ── Export routes ──────────────────────────────────────────────────────────────
 @app.route("/download-excel")
 def download_excel():
     df   = get_df()
@@ -268,5 +253,4 @@ def download_excel():
 
 
 if __name__ == "__main__":
-    import os
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
