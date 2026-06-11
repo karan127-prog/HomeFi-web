@@ -34,14 +34,14 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 
 
 def get_df():
-    """Load all expenses from Supabase into a DataFrame"""
     response = supabase.table("expenses").select("*").execute()
     data = response.data
     if not data:
         return pd.DataFrame(columns=["date","category","type","amount","description"])
     df = pd.DataFrame(data)
-    df["date"]   = pd.to_datetime(df["date"])
-    df["amount"] = df["amount"].astype(float)
+    df["date"]   = pd.to_datetime(df["date"], errors="coerce")
+    df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
+    df = df.dropna(subset=["date"])
     return df
 
 
