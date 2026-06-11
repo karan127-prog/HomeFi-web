@@ -122,7 +122,10 @@ def dashboard():
                      savings_rate=0, num_transactions=0, months=0,
                      monthly_labels=[], monthly_exp=[], monthly_inc=[])
         return render_template("dashboard.html", stats=stats,
-                               username=get_current_user(), name=session.get("name",""))
+                       recent=[], months="[]", incomes="[]",
+                       expenses="[]", savings="[]",
+                       cat_names="[]", cat_amounts="[]",
+                       username=get_current_user(), name=session.get("name",""))
 
     exp_df = add_month_col(df[df["type"]=="expense"].copy())
     inc_df = add_month_col(df[df["type"]=="income"].copy())
@@ -145,8 +148,22 @@ def dashboard():
         monthly_exp=[float(monthly_exp.get(m,0)) for m in all_months],
         monthly_inc=[float(monthly_inc.get(m,0)) for m in all_months],
     )
+    # Recent transactions
+    recent_raw = supabase.table("expenses").select("*").eq("user_id", get_current_user()).order("date", desc=True).limit(10).execute()
+    recent = recent_raw.data or []
+
+# Category data
+    cat_data = df[df["type"]=="expense"].groupby("category")["amount"].sum()
+
     return render_template("dashboard.html", stats=stats,
-                           username=get_current_user(), name=session.get("name",""))
+                       recent=recent,
+                       months=json.dumps([str(m) for m in all_months]),
+                       incomes=json.dumps([float(monthly_inc.get(m,0)) for m in all_months]),
+                       expenses=json.dumps([float(monthly_exp.get(m,0)) for m in all_months]),
+                       savings=json.dumps([float(monthly_inc.get(m,0)-monthly_exp.get(m,0)) for m in all_months]),
+                       cat_names=json.dumps(cat_data.index.tolist()),
+                       cat_amounts=json.dumps([float(v) for v in cat_data.values]),
+                       username=get_current_user(), name=session.get("name",""))
 
 @app.route("/add", methods=["GET","POST"])
 @login_required
