@@ -305,6 +305,27 @@ def api_recommendations():
     score = min(100, int(savings_rate * 2))
     return jsonify({"tips": tips, "score": score})
 
+@app.route("/download-excel")
+@login_required
+def download_excel():
+    df = get_df()
+    if df.empty:
+        flash("Koi data nahi hai export karne ke liye!")
+        return redirect(url_for("dashboard"))
+    
+    from flask import send_file
+    import io
+    
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Transactions')
+    output.seek(0)
+    
+    return send_file(output,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True,
+                     download_name=f'HomeFi_{get_current_user()}.xlsx')
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
