@@ -7,26 +7,26 @@
 <div class="stats-grid">
   <div class="stat-card income">
     <div class="stat-label">Total Income</div>
-    <div class="stat-value">Rs.{{ "{:,.0f}".format(summary.total_income) }}</div>
+    <div class="stat-value">Rs.{{ "{:,.0f}".format(stats.total_income) }}</div>
     <div class="stat-sub">All time</div>
   </div>
   <div class="stat-card expense">
     <div class="stat-label">Total Expenses</div>
-    <div class="stat-value">Rs.{{ "{:,.0f}".format(summary.total_expense) }}</div>
+    <div class="stat-value">Rs.{{ "{:,.0f}".format(stats.total_expense) }}</div>
     <div class="stat-sub">All time</div>
   </div>
   <div class="stat-card savings">
     <div class="stat-label">Net Savings</div>
-    <div class="stat-value">Rs.{{ "{:,.0f}".format(summary.net_savings) }}</div>
+    <div class="stat-value">Rs.{{ "{:,.0f}".format(stats.net_savings) }}</div>
     <div class="stat-sub">Income - Expenses</div>
   </div>
   <div class="stat-card rate">
     <div class="stat-label">Savings Rate</div>
-    <div class="stat-value">{{ summary.savings_rate }}%</div>
+    <div class="stat-value">{{ stats.savings_rate }}%</div>
     <div class="stat-sub">
-      {% if summary.savings_rate >= 30 %}Excellent!
-      {% elif summary.savings_rate >= 20 %}Good
-      {% elif summary.savings_rate >= 10 %}Average
+      {% if stats.savings_rate >= 30 %}Excellent!
+      {% elif stats.savings_rate >= 20 %}Good
+      {% elif stats.savings_rate >= 10 %}Average
       {% else %}Needs work
       {% endif %}
     </div>
