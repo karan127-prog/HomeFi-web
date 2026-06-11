@@ -387,7 +387,16 @@
 <div class="main">
   <div class="topbar">
     <div class="topbar-title">{% block page_title %}Dashboard{% endblock %}</div>
-    <div class="topbar-badge">Data Analytics Project</div>
+    <div style="display:flex; align-items:center; gap:10px;">
+  <div style="background:rgba(79,195,247,0.1); border:1px solid rgba(79,195,247,0.2); border-radius:20px; padding:5px 14px; display:flex; align-items:center; gap:8px;">
+    <div style="width:8px; height:8px; background:#69f0ae; border-radius:50%;"></div>
+    <span style="color:#e8eaf6; font-size:13px;">{{ session.get('name', '') }}</span>
+    <span style="color:#7986cb; font-size:12px;">@{{ session.get('username', '') }}</span>
+  </div>
+  <a href="/logout" style="background:rgba(255,83,112,0.1); border:1px solid rgba(255,83,112,0.3); border-radius:20px; padding:5px 14px; color:#ff5370; font-size:13px; text-decoration:none; font-weight:600;">
+    ⏻ Logout
+  </a>
+</div>
   </div>
 
   <div class="content">
