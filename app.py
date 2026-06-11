@@ -55,10 +55,12 @@ def dashboard():
     rate = round((sav / inc * 100) if inc > 0 else 0, 1)
 
     exp_df = df[df["type"] == "expense"].copy()
+    exp_df["date"] = pd.to_datetime(exp_df["date"], errors="coerce")
     exp_df["month"] = exp_df["date"].dt.to_period("M")
     monthly_exp = exp_df.groupby("month")["amount"].sum()
 
     inc_df = df[df["type"] == "income"].copy()
+    inc_df["date"] = pd.to_datetime(inc_df["date"], errors="coerce")
     inc_df["month"] = inc_df["date"].dt.to_period("M")
     monthly_inc = inc_df.groupby("month")["amount"].sum()
     monthly_sav = monthly_inc.subtract(monthly_exp, fill_value=0)
