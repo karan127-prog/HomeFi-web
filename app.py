@@ -151,6 +151,8 @@ def dashboard():
 @app.route("/add", methods=["GET","POST"])
 @login_required
 def add_entry():
+    categories = ["Food","Transport","Entertainment","Shopping",
+                  "Healthcare","Utilities","Education","Rent","Salary","Other"]
     if request.method == "POST":
         supabase.table("expenses").insert({
             "date":        request.form["date"],
@@ -161,7 +163,7 @@ def add_entry():
             "user_id":     get_current_user()
         }).execute()
         return redirect(url_for("dashboard"))
-    return render_template("add.html")
+    return render_template("add.html", categories=categories)
 
 @app.route("/categories")
 @login_required
