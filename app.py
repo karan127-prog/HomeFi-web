@@ -1,7 +1,7 @@
 """
 app.py
 ------
-HomeFi Web — Flask entry point
+HomeFi Web — Flask entry point with Supabase database
 Run: python app.py
 Then open: http://127.0.0.1:5000
 """
@@ -14,14 +14,19 @@ import pandas as pd
 from datetime import datetime
 from types import SimpleNamespace
 from flask import Flask, render_template, jsonify, request, redirect, url_for, send_file
+from supabase import create_client
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "Modules"))
-from loader import load_data
 from report_generator import generate_report
 from excel_exporter import export_to_excel
 
 app = Flask(__name__)
-DATA_FILE   = os.path.join("Data", "expenses.csv")
+
+# ── Supabase config ────────────────────────────────────────────────────────────
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://mhdhhyynritbuhpurdii.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oZGhoeXlucml0YnVocHVyZGlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNjc0MTUsImV4cCI6MjA5Njc0MzQxNX0.L9ob_H7C9uFql9eIeT6-P9EIkfeRyw7bOmvk0Hm88_g")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 CHARTS_DIR  = "Charts"
 REPORTS_DIR = "Reports"
 os.makedirs(CHARTS_DIR,  exist_ok=True)
@@ -29,96 +34,18 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 
 
 def get_df():
-    return load_data(DATA_FILE)
+    """Load all expenses from Supabase into a DataFrame"""
+    response = supabase.table("expenses").select("*").execute()
+    data = response.data
+    if not data:
+        return pd.DataFrame(columns=["date","category","type","amount","description"])
+    df = pd.DataFrame(data)
+    df["date"]   = pd.to_datetime(df["date"])
+    df["amount"] = df["amount"].astype(float)
+    return df
 
 
-def collect_report_data(df):
-    inc_df = df[df["type"] == "income"].copy()
-    exp_df = df[df["type"] == "expense"].copy()
-
-    total_income  = inc_df["amount"].sum()
-    total_expense = exp_df["amount"].sum()
-    net_savings   = total_income - total_expense
-    savings_rate  = (net_savings / total_income * 100) if total_income > 0 else 0
-
-    exp_df["month"] = exp_df["date"].dt.to_period("M")
-    inc_df["month"] = inc_df["date"].dt.to_period("M")
-    monthly_exp = exp_df.groupby("month")["amount"].sum()
-    monthly_inc = inc_df.groupby("month")["amount"].sum()
-    monthly_sav = monthly_inc.subtract(monthly_exp, fill_value=0)
-
-    summary = {
-        "total_income":  float(total_income),
-        "total_expense": float(total_expense),
-        "net_savings":   float(net_savings),
-        "savings_rate":  round(float(savings_rate), 1),
-        "months":        int(monthly_exp.shape[0]),
-        "best_month":    str(monthly_sav.idxmax()) if not monthly_sav.empty else "N/A",
-        "worst_month":   str(monthly_exp.idxmax()) if not monthly_exp.empty else "N/A",
-    }
-
-    if len(monthly_exp) >= 2:
-        x = np.arange(len(monthly_exp))
-        y = monthly_exp.values
-        m_slope, b = np.polyfit(x, y, 1)
-        predicted = float(m_slope * len(monthly_exp) + b)
-        trend = "increasing" if m_slope > 50 else ("decreasing" if m_slope < -50 else "stable")
-    else:
-        m_slope, predicted, trend = 0.0, float(total_expense), "stable"
-
-    forecast_data = {
-        "predicted_expense": predicted,
-        "trend":             trend,
-        "monthly_change":    float(m_slope),
-    }
-
-    goals = []
-    goals_path = os.path.join("Data", "goals.json")
-    if os.path.exists(goals_path):
-        with open(goals_path) as f:
-            raw_goals = json.load(f)
-        avg_sav = float(monthly_sav.mean()) if not monthly_sav.empty else 0
-        for g in raw_goals:
-            target    = g.get("target", 0)
-            saved     = g.get("current_savings", 0)
-            remaining = max(0, target - saved)
-            eta = f"{int(remaining / avg_sav)} months" if avg_sav > 0 else "N/A"
-            goals.append({"name": g.get("name", "Goal"), "target": target,
-                          "saved": saved, "eta": eta})
-
-    tips = []
-    thresholds = {"Food": 25, "Entertainment": 10, "Shopping": 15, "Travel": 10}
-    cat_totals = exp_df.groupby("category")["amount"].sum()
-    for cat, amt in cat_totals.items():
-        pct   = (amt / total_expense * 100) if total_expense > 0 else 0
-        limit = thresholds.get(cat, 30)
-        if pct > limit:
-            tips.append(f"{cat} is {pct:.1f}% of expenses — aim below {limit}%.")
-    if savings_rate < 20:
-        tips.append(f"Savings rate {savings_rate:.1f}% — target at least 20%.")
-    if not tips:
-        tips.append("Excellent discipline! Consider investing the surplus.")
-
-    return summary, forecast_data, goals, tips
-
-
-def generate_all_charts(df):
-    import matplotlib
-    matplotlib.use("Agg")
-    from categorizer import run_categorizer
-    # from trends      import run_trends
-    from budget      import run_budget
-    from forecaster  import run_forecaster
-    from goals       import run_goals
-    from recommender import run_recommender
-    run_categorizer(df)
-    # run_trends(df)
-    run_budget(df)
-    run_forecaster(df)
-    run_goals(df)
-    run_recommender(df)
-
-
+# ── Page routes ────────────────────────────────────────────────────────────────
 @app.route("/")
 def dashboard():
     df  = get_df()
@@ -180,6 +107,32 @@ def dashboard():
     )
 
 
+@app.route("/categories")
+def categories():
+    return render_template("categories.html")
+
+@app.route("/trends")
+def trends():
+    return render_template("trends.html")
+
+@app.route("/budget")
+def budget():
+    return render_template("budget.html")
+
+@app.route("/forecast")
+def forecast():
+    return render_template("forecast.html")
+
+@app.route("/goals")
+def goals():
+    return render_template("goals.html")
+
+@app.route("/recommendations")
+def recommendations():
+    return render_template("recommendations.html")
+
+
+# ── API routes ─────────────────────────────────────────────────────────────────
 @app.route("/api/categories")
 def api_categories():
     df  = get_df()
@@ -276,6 +229,7 @@ def api_goals():
     return jsonify(result)
 
 
+# ── Add expense ────────────────────────────────────────────────────────────────
 @app.route("/add", methods=["GET", "POST"])
 def add_expense():
     categories = ["Food", "Rent", "EMI", "Entertainment", "Shopping",
@@ -285,65 +239,30 @@ def add_expense():
         date  = request.form.get("date") or datetime.now().strftime("%Y-%m-%d")
         cat   = request.form.get("category")
         etype = request.form.get("type")
-        amt   = request.form.get("amount")
+        amt   = float(request.form.get("amount"))
         desc  = request.form.get("description") or cat
-        with open(DATA_FILE, "a") as f:
-            f.write(f"\n{date},{cat},{etype},{amt},{desc}")
+
+        # Save to Supabase
+        supabase.table("expenses").insert({
+            "date":        date,
+            "category":    cat,
+            "type":        etype,
+            "amount":      amt,
+            "description": desc
+        }).execute()
+
         return redirect(url_for("dashboard"))
+
     return render_template("add.html", categories=categories,
                            today=datetime.now().strftime("%Y-%m-%d"))
 
 
-@app.route("/download-pdf")
-def download_pdf():
-    df = get_df()
-    print("[*] Generating charts...")
-    generate_all_charts(df)
-    print("[*] Collecting data...")
-    summary, forecast_data, goals, tips = collect_report_data(df)
-    print("[*] Building PDF...")
-    pdf_path = generate_report(
-        summary       = summary,
-        forecast_data = forecast_data,
-        goals         = goals,
-        tips          = tips,
-        charts_dir    = CHARTS_DIR,
-        reports_dir   = REPORTS_DIR,
-    )
-    print(f"[OK] PDF: {pdf_path}")
-    return send_file(pdf_path, as_attachment=True)
-
-
+# ── Export routes ──────────────────────────────────────────────────────────────
 @app.route("/download-excel")
 def download_excel():
     df   = get_df()
     path = export_to_excel(df)
     return send_file(path, as_attachment=True)
-
-@app.route("/categories")
-def categories():
-    return render_template("categories.html")
-
-@app.route("/trends")
-def trends():
-    return render_template("trends.html")
-
-@app.route("/budget")
-def budget():
-    return render_template("budget.html")
-
-@app.route("/forecast")
-def forecast():
-    return render_template("forecast.html")
-
-@app.route("/goals")
-def goals():
-    return render_template("goals.html")
-
-@app.route("/recommendations")
-def recommendations():
-    return render_template("recommendations.html")
-
 
 
 if __name__ == "__main__":
