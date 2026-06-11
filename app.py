@@ -315,17 +315,75 @@ def download_excel():
     
     from flask import send_file
     import io
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
     
+    # Clean data
+    df_export = df.copy()
+    df_export['date'] = pd.to_datetime(df_export['date'], errors='coerce').dt.strftime('%Y-%m-%d')
+    cols = ['date', 'category', 'type', 'amount', 'description']
+    df_export = df_export[[c for c in cols if c in df_export.columns]]
+    df_export.columns = ['Date', 'Category', 'Type', 'Amount (Rs.)', 'Description']
+
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Transactions')
+        df_export.to_excel(writer, index=False, sheet_name='Transactions', startrow=2)
+        wb = writer.book
+        ws = writer.sheets['Transactions']
+
+        # --- Title row ---
+        ws.merge_cells('A1:E1')
+        title_cell = ws['A1']
+        title_cell.value = f'HomeFi — Transaction Report ({get_current_user()})'
+        title_cell.font = Font(bold=True, size=14, color='FFFFFF')
+        title_cell.fill = PatternFill('solid', fgColor='1a1a2e')
+        title_cell.alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[1].height = 30
+
+        # --- Header row styling ---
+        header_fill = PatternFill('solid', fgColor='4fc3f7')
+        header_font = Font(bold=True, color='000000', size=11)
+        for col in range(1, 6):
+            cell = ws.cell(row=3, column=col)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+
+        # --- Data rows alternating colors ---
+        light = PatternFill('solid', fgColor='1e1e3a')
+        dark  = PatternFill('solid', fgColor='252545')
+        green_font = Font(color='69f0ae', bold=True)
+        red_font   = Font(color='ff5370', bold=True)
+
+        for i, row in enumerate(ws.iter_rows(min_row=4, max_row=ws.max_row), start=0):
+            for cell in row:
+                cell.fill = light if i % 2 == 0 else dark
+                cell.font = Font(color='e8eaf6')
+                cell.alignment = Alignment(horizontal='center')
+            # Amount column color
+            type_cell   = ws.cell(row=row[0].row, column=3)
+            amount_cell = ws.cell(row=row[0].row, column=4)
+            if type_cell.value == 'income':
+                amount_cell.font = green_font
+            else:
+                amount_cell.font = red_font
+
+        # --- Column widths ---
+        widths = [14, 16, 12, 16, 30]
+        for i, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+        # --- Border ---
+        thin = Side(style='thin', color='3a3a5c')
+        for row in ws.iter_rows(min_row=3, max_row=ws.max_row):
+            for cell in row:
+                cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
     output.seek(0)
-    
     return send_file(output,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      as_attachment=True,
                      download_name=f'HomeFi_{get_current_user()}.xlsx')
-
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
