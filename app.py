@@ -384,6 +384,24 @@ def download_excel():
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      as_attachment=True,
                      download_name=f'HomeFi_{get_current_user()}.xlsx')
+
+
+@app.route("/delete-transaction/<int:transaction_id>")
+@login_required
+def delete_transaction(transaction_id):
+    supabase.table("expenses").delete().eq("id", transaction_id).eq("user_id", get_current_user()).execute()
+    flash("Transaction deleted!", "success")
+    return redirect(url_for("dashboard"))
+
+@app.route("/delete-account")
+@login_required
+def delete_account():
+    user = get_current_user()
+    supabase.table("expenses").delete().eq("user_id", user).execute()
+    supabase.table("users").delete().eq("username", user).execute()
+    session.clear()
+    flash("Account deleted successfully!", "success")
+    return redirect(url_for("login"))
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

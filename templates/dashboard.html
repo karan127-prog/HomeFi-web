@@ -65,6 +65,7 @@
         <th>Description</th>
         <th>Type</th>
         <th style="text-align:right">Amount</th>
+        <th style="text-align:center">Action</th>
       </tr>
     </thead>
     <tbody>
@@ -83,6 +84,11 @@
         <td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:600;
           color:{% if row.type=='income' %}var(--green){% else %}var(--red){% endif %}">
           Rs.{{ "{:,.0f}".format(row.amount) }}
+        </td>
+        <td style="text-align:center">
+          <a href="/delete-transaction/{{ row.id }}" 
+             onclick="return confirm('Sure delete karna hai?')"
+             style="color:var(--red); text-decoration:none; font-size:16px;">🗑️</a>
         </td>
       </tr>
       {% endfor %}
