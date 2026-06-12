@@ -41,7 +41,7 @@ fetch("/api/categories")
         plugins: { legend: { display: false } },
         scales: {
           x: { ticks: { color: "#7986cb" }, grid: { display: false } },
-          y: { ticks: { color: "#7986cb", callback: v => "Rs." + (v/1000).toFixed(0) + "k" }, grid: { color: "#252540" } }
+          y: { ticks: { color: "#7986cb", callback: v => v >= 1000 ? "Rs." + (v/1000).toFixed(1) + "k" : "Rs." + v }, grid: { color: "#252540" } }
         }
       }
     });
