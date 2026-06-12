@@ -36,6 +36,9 @@
 <div style="margin-bottom:20px;display:flex;gap:10px;">
     <a href="/download-pdf" class="btn">📄 Export PDF</a>
     <a href="/download-excel" class="btn">📊 Export Excel</a>
+    <a href="/clear-transactions" 
+       onclick="return confirm('Sab transactions delete karne hain? Ye undo nahi hoga!')"
+       class="btn" style="background:var(--red); color:white;">🗑️ Clear All Transactions</a>
 </div>
 
 <!-- CHARTS ROW -->
@@ -142,5 +145,34 @@ new Chart(ctxDonut, {
     cutout: "65%"
   }
 });
+
+// Animate stat card numbers
+function animateValue(el, start, end, duration, prefix = "", suffix = "") {
+  let startTime = null;
+  function step(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const progress = Math.min((timestamp - startTime) / duration, 1);
+    const value = Math.floor(progress * (end - start) + start);
+    el.textContent = prefix + value.toLocaleString() + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+    else el.textContent = prefix + end.toLocaleString() + suffix;
+  }
+  requestAnimationFrame(step);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const statValues = document.querySelectorAll(".stat-value");
+  statValues.forEach(el => {
+    const text = el.textContent.trim();
+    if (text.includes("Rs.")) {
+      const num = parseInt(text.replace("Rs.","").replace(/,/g,""));
+      animateValue(el, 0, num, 800, "Rs.");
+    } else if (text.includes("%")) {
+      const num = parseFloat(text.replace("%",""));
+      animateValue(el, 0, num, 800, "", "%");
+    }
+  });
+});
+
 </script>
 {% endblock %}

@@ -402,6 +402,13 @@ def delete_account():
     session.clear()
     flash("Account deleted successfully!", "success")
     return redirect(url_for("login"))
+
+@app.route("/clear-transactions")
+@login_required
+def clear_transactions():
+    supabase.table("expenses").delete().eq("user_id", get_current_user()).execute()
+    flash("Saare transactions delete ho gaye!", "success")
+    return redirect(url_for("dashboard"))
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
