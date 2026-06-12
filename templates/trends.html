@@ -1,104 +1,60 @@
 {% extends "base.html" %}
-{% block title %}Trends{% endblock %}
+{% block page_title %}Trends{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <div class="page-title">Monthly Trends</div>
-  <div class="page-subtitle">Income vs Expenses over time</div>
-</div>
 
-<div class="card" style="margin-bottom:24px;">
-  <div class="section-title">Income vs Expenses vs Savings</div>
-  <div style="position:relative;height:320px;"><canvas id="trendLine"></canvas></div>
-</div>
-
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-  <div class="card">
-    <div class="section-title">Savings Rate by Month</div>
-    <div style="position:relative;height:260px;"><canvas id="savingsBar"></canvas></div>
-  </div>
-  <div class="card">
-    <div class="section-title">Month-wise Summary</div>
-    <div id="month-table"><p style="color:var(--muted);padding:20px;">Loading...</p></div>
+<div class="card" style="margin-bottom:24px">
+  <div class="card-title">Monthly Income vs Expense vs Savings</div>
+  <div class="chart-wrap" style="height:340px">
+    <canvas id="trendChart"></canvas>
   </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Total Income (All Months)</div>
+    <div class="stat-value" style="color:var(--green)" id="totalIncome">Rs.0</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Total Expense (All Months)</div>
+    <div class="stat-value" style="color:var(--red)" id="totalExpense">Rs.0</div>
+  </div>
+</div>
+
 <script>
-fetch('/api/trends').then(r=>r.json()).then(d => {
-  const months  = d.months  || [];
-  const income  = d.income  || [];
-  const expense = d.expense || [];
-  const savings = d.savings || [];
-
-  // Line chart
-  new Chart(document.getElementById('trendLine'), {
-    type: 'line',
-    data: {
-      labels: months,
-      datasets: [
-        { label:'Income',   data: income,  borderColor:'#00d4aa', backgroundColor:'rgba(0,212,170,0.1)',  fill:true, tension:0.4, pointRadius:5, pointBackgroundColor:'#00d4aa' },
-        { label:'Expenses', data: expense, borderColor:'#e05260', backgroundColor:'rgba(224,82,96,0.08)', fill:true, tension:0.4, pointRadius:5, pointBackgroundColor:'#e05260' },
-        { label:'Savings',  data: savings, borderColor:'#7c6df0', backgroundColor:'transparent', fill:false, tension:0.4, pointRadius:5, borderDash:[5,3], pointBackgroundColor:'#7c6df0' }
-      ]
-    },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins: { legend: { labels:{ font:{size:11}, boxWidth:12 } } },
-      scales: {
-        x: { grid:{ color:'#252830' } },
-        y: { grid:{ color:'#252830' }, ticks:{ callback: v => '₹'+(v/1000).toFixed(0)+'k' } }
-      }
+fetch("/api/trends")
+  .then(res => res.json())
+  .then(data => {
+    if (!data.months.length) {
+      document.querySelector(".content").insertAdjacentHTML("afterbegin",
+        '<div class="card" style="text-align:center;color:var(--muted);padding:40px 0;margin-bottom:24px">Abhi koi data nahi hai. Pehle kuch transactions add karo!</div>');
+      return;
     }
-  });
 
-  // Savings rate bar
-  const rates = months.map((_,i) => income[i] > 0 ? ((savings[i]/income[i])*100).toFixed(1) : 0);
-  const barColors = rates.map(r => r >= 20 ? '#00d4aa' : r >= 10 ? '#f5a623' : '#e05260');
-
-  new Chart(document.getElementById('savingsBar'), {
-    type: 'bar',
-    data: {
-      labels: months,
-      datasets: [
-        { label:'Savings Rate %', data: rates, backgroundColor: barColors, borderRadius: 6 },
-        { label:'Target 20%', data: months.map(()=>20), type:'line', borderColor:'rgba(255,255,255,0.2)', borderDash:[5,3], pointRadius:0, fill:false }
-      ]
-    },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins: { legend:{ labels:{ font:{size:11}, boxWidth:12 } } },
-      scales: {
-        x: { grid:{display:false} },
-        y: { grid:{color:'#252830'}, ticks:{ callback: v => v+'%' } }
+    new Chart(document.getElementById("trendChart").getContext("2d"), {
+      type: "line",
+      data: {
+        labels: data.months,
+        datasets: [
+          { label: "Income",  data: data.income,  borderColor: "#69f0ae", backgroundColor: "rgba(105,240,174,0.08)", tension: 0.4, fill: true, pointRadius: 5 },
+          { label: "Expense", data: data.expense, borderColor: "#ff5370", backgroundColor: "rgba(255,83,112,0.08)",  tension: 0.4, fill: true, pointRadius: 5 },
+          { label: "Savings", data: data.savings, borderColor: "#4fc3f7", backgroundColor: "rgba(79,195,247,0.08)",  tension: 0.4, fill: true, pointRadius: 5, borderDash: [5,3] }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: "#e8eaf6", font: { family: "Space Grotesk" } } } },
+        scales: {
+          x: { ticks: { color: "#7986cb" }, grid: { color: "#252540" } },
+          y: { ticks: { color: "#7986cb", callback: v => "Rs." + (v/1000).toFixed(0) + "k" }, grid: { color: "#252540" } }
+        }
       }
-    }
-  });
+    });
 
-  // Month table
-  let html = `<table style="width:100%;border-collapse:collapse;">
-    <thead><tr>
-      <th style="text-align:left;padding:8px 10px;font-size:0.7rem;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">Month</th>
-      <th style="text-align:left;padding:8px 10px;font-size:0.7rem;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">Income</th>
-      <th style="text-align:left;padding:8px 10px;font-size:0.7rem;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">Expense</th>
-      <th style="text-align:left;padding:8px 10px;font-size:0.7rem;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);">Rate</th>
-    </tr></thead><tbody>`;
-
-  months.forEach((m, i) => {
-    const rate = income[i] > 0 ? ((savings[i]/income[i])*100).toFixed(0) : 0;
-    const cls  = rate >= 20 ? 'color:#00d4aa' : rate >= 10 ? 'color:#f5a623' : 'color:#e05260';
-    html += `<tr>
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:0.8rem;">${m}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border);color:#00d4aa;font-size:0.8rem;">₹${Number(income[i]).toLocaleString('en-IN')}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border);color:#e05260;font-size:0.8rem;">₹${Number(expense[i]).toLocaleString('en-IN')}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border);${cls};font-size:0.8rem;font-weight:600;">${rate}%</td>
-    </tr>`;
+    const totalIncome  = data.income.reduce((a,b) => a+b, 0);
+    const totalExpense = data.expense.reduce((a,b) => a+b, 0);
+    document.getElementById("totalIncome").textContent  = "Rs." + totalIncome.toLocaleString();
+    document.getElementById("totalExpense").textContent = "Rs." + totalExpense.toLocaleString();
   });
-  html += '</tbody></table>';
-  document.getElementById('month-table').innerHTML = html;
-}).catch(() => {
-  document.getElementById('month-table').innerHTML = '<p style="color:var(--danger);padding:20px;">Error loading data.</p>';
-});
 </script>
 {% endblock %}
