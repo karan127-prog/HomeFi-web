@@ -202,10 +202,6 @@ def budget(): return render_template("budget.html")
 @login_required
 def forecast(): return render_template("forecast.html")
 
-@app.route("/goals")
-@login_required
-def goals(): return render_template("goals.html")
-
 @app.route("/recommendations")
 @login_required
 def recommendations(): return render_template("recommendations.html")
@@ -278,15 +274,6 @@ def api_forecast():
         "actual":   actuals + [None]*3,
         "forecast": [None]*len(actuals) + [round(avg*(1+0.02*i),2) for i in range(1,4)],
     })
-
-@app.route("/api/goals")
-@login_required
-def api_goals():
-    goals_path = os.path.join("Data","goals.json")
-    if not os.path.exists(goals_path):
-        return jsonify({"error":"No goals found. Create a Data/goals.json file."})
-    with open(goals_path) as f:
-        return jsonify(json.load(f))
 
 @app.route("/api/recommendations")
 @login_required
