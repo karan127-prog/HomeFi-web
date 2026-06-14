@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block page_title %}History{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-title">Past Months Summary</div>
+  <div id="historyList"></div>
+</div>
+
+<script>
+fetch("/api/history")
+  .then(res => res.json())
+  .then(data => {
+    if (!data.months.length) {
+      document.getElementById("historyList").innerHTML =
+        '<div style="text-align:center;color:var(--muted);padding:40px 0">Abhi koi past month data nahi hai. Agle mahine se yahan history dikhegi!</div>';
+      return;
+    }
+
+    let html = '<table class="data-table"><thead><tr><th>Month</th><th>Income</th><th>Expense</th><th>Savings</th><th>Transactions</th></tr></thead><tbody>';
+    data.months.forEach(m => {
+      const savingsColor = m.savings >= 0 ? "var(--green)" : "var(--red)";
+      html += `
+        <tr>
+          <td style="font-weight:600">${m.month}</td>
+          <td style="color:var(--green)">Rs.${m.income.toLocaleString()}</td>
+          <td style="color:var(--red)">Rs.${m.expense.toLocaleString()}</td>
+          <td style="color:${savingsColor};font-weight:600">Rs.${m.savings.toLocaleString()}</td>
+          <td style="color:var(--muted)">${m.transactions}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById("historyList").innerHTML = html;
+  });
+</script>
+{% endblock %}

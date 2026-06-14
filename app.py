@@ -117,6 +117,10 @@ def logout():
 @login_required
 def dashboard():
     df = get_df()
+    # Filter to current month only
+    current_month = pd.Timestamp.now().to_period("M")
+    df = add_month_col(df)
+    df = df[df["month"] == current_month].drop(columns=["month"])
     if df.empty:
         stats = dict(total_income=0, total_expense=0, net_savings=0,
                      savings_rate=0, num_transactions=0, months=0,
@@ -409,6 +413,38 @@ def clear_transactions():
     supabase.table("expenses").delete().eq("user_id", get_current_user()).execute()
     flash("Saare transactions delete ho gaye!", "success")
     return redirect(url_for("dashboard"))
+
+@app.route("/history")
+@login_required
+def history():
+    return render_template("history.html")
+
+@app.route("/api/history")
+@login_required
+def api_history():
+    df = get_df()
+    if df.empty:
+        return jsonify({"months": []})
+    
+    df = add_month_col(df)
+    current_month = pd.Timestamp.now().to_period("M")
+    
+    months_data = []
+    for month, group in df.groupby("month"):
+        if month == current_month:
+            continue  # skip current month
+        income = float(group[group["type"]=="income"]["amount"].sum())
+        expense = float(group[group["type"]=="expense"]["amount"].sum())
+        months_data.append({
+            "month": str(month),
+            "income": income,
+            "expense": expense,
+            "savings": income - expense,
+            "transactions": len(group)
+        })
+    
+    months_data.sort(key=lambda x: x["month"], reverse=True)
+    return jsonify({"months": months_data})
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
