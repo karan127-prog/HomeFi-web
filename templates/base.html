@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -8,6 +8,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>  <style>
     :root {
+      --sidebar-w: 230px;
+      --radius:   12px;
+    }
+
+    [data-theme="dark"] {
       --bg:       #0d0d14;
       --surface:  #13131f;
       --card:     #1a1a2e;
@@ -19,9 +24,23 @@
       --purple:   #b388ff;
       --text:     #e8eaf6;
       --muted:    #7986cb;
-      --sidebar-w: 230px;
-      --radius:   12px;
     }
+
+    [data-theme="light"] {
+      --bg:       #f4f6fb;
+      --surface:  #ffffff;
+      --card:     #ffffff;
+      --border:   #e1e5ee;
+      --accent:   #0288d1;
+      --green:    #2e7d32;
+      --red:      #c62828;
+      --yellow:   #f9a825;
+      --purple:   #6a1b9a;
+      --text:     #1a1a2e;
+      --muted:    #6b7494;
+    }
+
+    body { transition: background 0.2s ease, color 0.2s ease; }
 
     * { margin:0; padding:0; box-sizing:border-box; }
 
@@ -375,7 +394,6 @@
     <a href="/forecast"       class="nav-link {% if page=='forecast'        %}active{% endif %}"><span class="icon">🔮</span> Forecast</a>
 
     <div class="nav-label" style="margin-top:12px">Planning</div>
-    <a href="/goals"          class="nav-link {% if page=='goals'           %}active{% endif %}"><span class="icon">🎯</span> Goals</a>
     <a href="/recommendations"class="nav-link {% if page=='recommendations' %}active{% endif %}"><span class="icon">💡</span> Tips</a>
 
     <div class="nav-label" style="margin-top:12px">Actions</div>
@@ -392,8 +410,8 @@
     <div style="display:flex; align-items:center; gap:10px;">
   <div style="background:rgba(79,195,247,0.1); border:1px solid rgba(79,195,247,0.2); border-radius:20px; padding:5px 14px; display:flex; align-items:center; gap:8px;">
     <div style="width:8px; height:8px; background:#69f0ae; border-radius:50%;"></div>
-    <span style="color:#e8eaf6; font-size:13px;">{{ session.get('name', '') }}</span>
-    <span style="color:#7986cb; font-size:12px;">@{{ session.get('username', '') }}</span>
+    <span style="color:var(--text); font-size:13px;">{{ session.get('name', '') }}</span>
+<span style="color:var(--muted); font-size:12px;">@{{ session.get('username', '') }}</span>
   </div>
   <a href="/logout" style="background:rgba(255,83,112,0.1); border:1px solid rgba(255,83,112,0.3); border-radius:20px; padding:5px 14px; color:#ff5370; font-size:13px; text-decoration:none; font-weight:600;">
     ⏻ Logout
@@ -403,6 +421,9 @@
    style="background:rgba(255,83,112,0.1); border:1px solid rgba(255,83,112,0.3); border-radius:20px; padding:5px 14px; color:#ff5370; font-size:13px; text-decoration:none; font-weight:600;">
   🗑️ Delete Account
 </a>
+<button id="themeToggle" onclick="toggleTheme()" style="background:var(--card); border:1px solid var(--border); border-radius:20px; padding:5px 14px; color:var(--text); font-size:13px; cursor:pointer; font-family:'Space Grotesk',sans-serif; font-weight:600;">
+    <span id="themeIcon">🌙</span> <span id="themeLabel">Dark</span>
+  </button>
 </div>
   </div>
 
@@ -412,5 +433,33 @@
 </div>
 
   <script src="{{ url_for('static', filename='charts.js') }}"></script>
+<script>
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const icon = document.getElementById('themeIcon');
+    const label = document.getElementById('themeLabel');
+    if (icon && label) {
+      if (theme === 'light') {
+        icon.textContent = '☀️';
+        label.textContent = 'Light';
+      } else {
+        icon.textContent = '🌙';
+        label.textContent = 'Dark';
+      }
+    }
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    localStorage.setItem('homefi-theme', next);
+  }
+
+  (function() {
+    const saved = localStorage.getItem('homefi-theme');
+    if (saved) applyTheme(saved);
+  })();
+</script>
 </body>
 </html>
