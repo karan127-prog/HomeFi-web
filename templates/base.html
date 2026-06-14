@@ -6,41 +6,46 @@
   <title>HomeFi — {% block title %}Dashboard{% endblock %}</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>  <style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+  <style>
     :root {
       --sidebar-w: 230px;
-      --radius:   12px;
+      --radius:   18px;
     }
 
     [data-theme="dark"] {
-      --bg:       #0d0d14;
-      --surface:  #13131f;
-      --card:     #1a1a2e;
-      --border:   #252540;
+      --bg:       #1c1c2e;
+      --surface:  #1c1c2e;
+      --card:     #1c1c2e;
+      --border:   transparent;
+      --shadow-dark:  #121220;
+      --shadow-light: #2a2a42;
       --accent:   #4fc3f7;
       --green:    #69f0ae;
       --red:      #ff5370;
       --yellow:   #ffd740;
       --purple:   #b388ff;
       --text:     #e8eaf6;
-      --muted:    #7986cb;
+      --muted:    #8b93b8;
     }
 
     [data-theme="light"] {
-      --bg:       #f4f6fb;
-      --surface:  #ffffff;
-      --card:     #ffffff;
-      --border:   #e1e5ee;
+      --bg:       #e8ecf3;
+      --surface:  #e8ecf3;
+      --card:     #e8ecf3;
+      --border:   transparent;
+      --shadow-dark:  #c5cbd9;
+      --shadow-light: #ffffff;
       --accent:   #0288d1;
       --green:    #2e7d32;
       --red:      #c62828;
       --yellow:   #f9a825;
       --purple:   #6a1b9a;
-      --text:     #1a1a2e;
-      --muted:    #6b7494;
+      --text:     #2d3250;
+      --muted:    #7a85a8;
     }
 
-    body { transition: background 0.2s ease, color 0.2s ease; }
+    body { transition: background 0.3s ease, color 0.3s ease; }
 
     * { margin:0; padding:0; box-sizing:border-box; }
 
@@ -55,8 +60,9 @@
     /* ── SIDEBAR ── */
     .sidebar {
       width: var(--sidebar-w);
-      background: var(--surface);
-      border-right: 1px solid var(--border);
+      background: var(--bg);
+      border-right: none;
+      box-shadow: 6px 0 20px var(--shadow-dark);
       display: flex;
       flex-direction: column;
       position: fixed;
@@ -68,7 +74,6 @@
 
     .sidebar-brand {
       padding: 24px 20px 16px;
-      border-bottom: 1px solid var(--border);
     }
 
     .sidebar-brand .logo {
@@ -104,25 +109,23 @@
       align-items: center;
       gap: 10px;
       padding: 10px 12px;
-      border-radius: 8px;
+      border-radius: 10px;
       color: var(--muted);
       text-decoration: none;
       font-size: 14px;
       font-weight: 500;
-      margin-bottom: 2px;
-      transition: all 0.15s ease;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
     }
 
     .nav-link:hover {
-      background: var(--card);
       color: var(--text);
+      box-shadow: 4px 4px 10px var(--shadow-dark), -4px -4px 10px var(--shadow-light);
     }
 
     .nav-link.active {
-      background: rgba(79,195,247,0.12);
       color: var(--accent);
-      border-left: 3px solid var(--accent);
-      padding-left: 9px;
+      box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
     }
 
     .nav-link .icon {
@@ -133,7 +136,6 @@
 
     .sidebar-footer {
       padding: 16px 20px;
-      border-top: 1px solid var(--border);
       font-size: 11px;
       color: var(--muted);
       font-family: 'JetBrains Mono', monospace;
@@ -147,8 +149,9 @@
     }
 
     .topbar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      border-bottom: none;
+      box-shadow: 0 6px 16px var(--shadow-dark);
       padding: 16px 32px;
       display: flex;
       align-items: center;
@@ -164,15 +167,28 @@
       color: var(--text);
     }
 
-    .topbar-badge {
-      background: rgba(79,195,247,0.12);
-      color: var(--accent);
-      border: 1px solid rgba(79,195,247,0.25);
-      padding: 4px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-family: 'JetBrains Mono', monospace;
+    .topbar-pill {
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg);
+      box-shadow: 4px 4px 10px var(--shadow-dark), -4px -4px 10px var(--shadow-light);
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif;
+      color: var(--text);
     }
+    .topbar-pill:hover {
+      transform: translateY(-1px);
+      box-shadow: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light);
+    }
+    .topbar-pill.danger { color: var(--red); }
 
     .content {
       padding: 28px 32px;
@@ -181,9 +197,10 @@
     /* ── CARDS ── */
     .card {
       background: var(--card);
-      border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 20px;
+      padding: 22px;
+      box-shadow: 8px 8px 18px var(--shadow-dark), -8px -8px 18px var(--shadow-light);
+      transition: box-shadow 0.3s ease;
     }
 
     .card-title {
@@ -205,30 +222,18 @@
 
     .stat-card {
       background: var(--card);
-      border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 20px;
       position: relative;
       overflow: hidden;
-      transition: transform 0.2s, border-color 0.2s;
+      box-shadow: 8px 8px 18px var(--shadow-dark), -8px -8px 18px var(--shadow-light);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
     }
 
     .stat-card:hover {
-      transform: translateY(-2px);
-      border-color: var(--accent);
+      transform: translateY(-4px);
+      box-shadow: 10px 10px 24px var(--shadow-dark), -10px -10px 24px var(--shadow-light);
     }
-
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-    }
-
-    .stat-card.income::before  { background: var(--green); }
-    .stat-card.expense::before { background: var(--red); }
-    .stat-card.savings::before { background: var(--accent); }
-    .stat-card.rate::before    { background: var(--yellow); }
 
     .stat-label {
       font-size: 12px;
@@ -275,18 +280,18 @@
       text-transform: uppercase;
       letter-spacing: 1px;
       color: var(--muted);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 2px solid var(--shadow-dark);
       font-weight: 600;
     }
 
     .data-table td {
       padding: 12px 14px;
-      border-bottom: 1px solid rgba(37,37,64,0.5);
+      border-bottom: 1px solid var(--shadow-dark);
       color: var(--text);
     }
 
     .data-table tr:last-child td { border-bottom: none; }
-    .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .data-table tr:hover td { background: var(--shadow-light); }
 
     /* ── BADGES ── */
     .badge {
@@ -304,10 +309,11 @@
 
     /* ── PROGRESS BAR ── */
     .progress-wrap {
-      background: var(--border);
+      background: var(--bg);
       border-radius: 999px;
       height: 8px;
       overflow: hidden;
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
     }
     .progress-fill {
       height: 100%;
@@ -338,35 +344,52 @@
     .form-input, .form-select {
       width: 100%;
       background: var(--bg);
-      border: 1px solid var(--border);
+      border: none;
       color: var(--text);
       padding: 10px 14px;
-      border-radius: 8px;
+      border-radius: 10px;
       font-size: 14px;
       font-family: 'Space Grotesk', sans-serif;
-      transition: border-color 0.2s;
+      box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
       outline: none;
+      transition: box-shadow 0.2s;
     }
-    .form-input:focus, .form-select:focus { border-color: var(--accent); }
+    .form-input:focus, .form-select:focus {
+      box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light), 0 0 0 2px var(--accent);
+    }
     .form-select option { background: var(--card); }
 
     .btn {
       padding: 10px 24px;
-      border-radius: 8px;
+      border-radius: 12px;
       border: none;
       cursor: pointer;
       font-family: 'Space Grotesk', sans-serif;
       font-weight: 600;
       font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      box-shadow: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light);
       transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
-    .btn-primary { background: var(--accent); color: var(--bg); }
-    .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn:hover {
+      box-shadow: 8px 8px 18px var(--shadow-dark), -8px -8px 18px var(--shadow-light);
+      transform: translateY(-1px);
+    }
+    .btn:active {
+      box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+      transform: translateY(0);
+    }
+    .btn-primary { color: var(--accent); }
 
     /* ── SCROLLBAR ── */
     ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: var(--surface); }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--shadow-dark); border-radius: 3px; }
 
     /* ── CHART DEFAULTS ── */
     .chart-wrap canvas { max-height: 280px; }
@@ -389,11 +412,11 @@
     <a href="/categories"     class="nav-link {% if page=='categories'      %}active{% endif %}"><span class="icon">🗂️</span> Categories</a>
     <a href="/trends"         class="nav-link {% if page=='trends'          %}active{% endif %}"><span class="icon">📈</span> Trends</a>
     <a href="/history"        class="nav-link {% if page=='history'         %}active{% endif %}"><span class="icon">📅</span> History</a>
-    <a href="/goals" class="nav-link {% if page=='goals' %}active{% endif %}"><span class="icon">🎯</span> Goals</a>
     <a href="/budget"         class="nav-link {% if page=='budget'          %}active{% endif %}"><span class="icon">💼</span> Budget</a>
     <a href="/forecast"       class="nav-link {% if page=='forecast'        %}active{% endif %}"><span class="icon">🔮</span> Forecast</a>
 
     <div class="nav-label" style="margin-top:12px">Planning</div>
+    <a href="/goals"          class="nav-link {% if page=='goals'           %}active{% endif %}"><span class="icon">🎯</span> Goals</a>
     <a href="/recommendations"class="nav-link {% if page=='recommendations' %}active{% endif %}"><span class="icon">💡</span> Tips</a>
 
     <div class="nav-label" style="margin-top:12px">Actions</div>
@@ -408,23 +431,19 @@
   <div class="topbar">
     <div class="topbar-title">{% block page_title %}Dashboard{% endblock %}</div>
     <div style="display:flex; align-items:center; gap:10px;">
-  <div style="background:rgba(79,195,247,0.1); border:1px solid rgba(79,195,247,0.2); border-radius:20px; padding:5px 14px; display:flex; align-items:center; gap:8px;">
-    <div style="width:8px; height:8px; background:#69f0ae; border-radius:50%;"></div>
-    <span style="color:var(--text); font-size:13px;">{{ session.get('name', '') }}</span>
-<span style="color:var(--muted); font-size:12px;">@{{ session.get('username', '') }}</span>
-  </div>
-  <a href="/logout" style="background:rgba(255,83,112,0.1); border:1px solid rgba(255,83,112,0.3); border-radius:20px; padding:5px 14px; color:#ff5370; font-size:13px; text-decoration:none; font-weight:600;">
-    ⏻ Logout
-  </a>
-  <a href="/delete-account" 
-   onclick="return confirm('PAKKA? Account aur saara data permanently delete ho jaayega!')"
-   style="background:rgba(255,83,112,0.1); border:1px solid rgba(255,83,112,0.3); border-radius:20px; padding:5px 14px; color:#ff5370; font-size:13px; text-decoration:none; font-weight:600;">
-  🗑️ Delete Account
-</a>
-<button id="themeToggle" onclick="toggleTheme()" style="background:var(--card); border:1px solid var(--border); border-radius:20px; padding:5px 14px; color:var(--text); font-size:13px; cursor:pointer; font-family:'Space Grotesk',sans-serif; font-weight:600;">
-    <span id="themeIcon">🌙</span> <span id="themeLabel">Dark</span>
-  </button>
-</div>
+      <div class="topbar-pill">
+        <div style="width:8px; height:8px; background:var(--green); border-radius:50%;"></div>
+        <span>{{ session.get('name', '') }}</span>
+        <span style="color:var(--muted); font-size:12px;">@{{ session.get('username', '') }}</span>
+      </div>
+      <a href="/logout" class="topbar-pill danger">⏻ Logout</a>
+      <a href="/delete-account"
+         onclick="return confirm('PAKKA? Account aur saara data permanently delete ho jaayega!')"
+         class="topbar-pill danger">🗑️ Delete Account</a>
+      <button id="themeToggle" onclick="toggleTheme()" class="topbar-pill">
+        <span id="themeIcon">🌙</span> <span id="themeLabel">Dark</span>
+      </button>
+    </div>
   </div>
 
   <div class="content">
@@ -432,7 +451,6 @@
   </div>
 </div>
 
-  <script src="{{ url_for('static', filename='charts.js') }}"></script>
 <script>
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
