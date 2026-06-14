@@ -1027,6 +1027,63 @@ def api_goals_add():
 def api_goals_delete(goal_id):
     supabase.table("goals").delete().eq("id", goal_id).eq("user_id", get_current_user()).execute()
     return jsonify({"success": True})
+
+@app.route("/budget")
+@login_required
+def budget_page():
+    return render_template("budget.html")
+
+@app.route("/api/budget-data")
+@login_required
+def api_budget_data():
+    user = get_current_user()
+    current_month = datetime.now().strftime("%Y-%m")
+
+    df = get_df()
+    df_m = add_month_col(df.copy())
+    cur_spending = df_m[(df_m["type"]=="expense") & (df_m["month"].astype(str)==current_month)].groupby("category")["amount"].sum()
+
+    res = supabase.table("budgets").select("*").eq("user_id", user).eq("month", current_month).execute()
+    budgets = res.data or []
+    budget_map = {b["category"]: float(b["amount"]) for b in budgets}
+
+    all_cats = sorted(set(budget_map.keys()) | set(cur_spending.index))
+
+    items = []
+    for cat in all_cats:
+        budget = budget_map.get(cat, 0)
+        spent = float(cur_spending.get(cat, 0))
+        items.append({
+            "category": cat,
+            "budget": budget,
+            "spent": spent,
+            "remaining": budget - spent,
+            "pct": (spent/budget*100) if budget > 0 else 0
+        })
+
+    return jsonify({"month": current_month, "items": items})
+
+@app.route("/api/budget/set", methods=["POST"])
+@login_required
+def api_budget_set():
+    user = get_current_user()
+    data = request.get_json()
+    category = data.get("category", "").strip()
+    amount = float(data.get("amount"))
+    current_month = datetime.now().strftime("%Y-%m")
+
+    if not category:
+        return jsonify({"success": False, "error": "Category required"}), 400
+
+    existing = supabase.table("budgets").select("*").eq("user_id", user).eq("category", category).eq("month", current_month).execute()
+    if existing.data:
+        supabase.table("budgets").update({"amount": amount}).eq("id", existing.data[0]["id"]).execute()
+    else:
+        supabase.table("budgets").insert({
+            "user_id": user, "category": category, "amount": amount, "month": current_month
+        }).execute()
+
+    return jsonify({"success": True})
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
