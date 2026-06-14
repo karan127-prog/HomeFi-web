@@ -1,65 +1,86 @@
 {% extends "base.html" %}
-{% block title %}Goals{% endblock %}
+{% block page_title %}Goals{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <div class="page-title">Savings Goals</div>
-  <div class="page-subtitle">Track your targets and estimated time to reach them</div>
+
+<div class="card" style="margin-bottom:24px">
+  <div class="card-title">🎯 Yearly Goal (<span id="yearLabel"></span>)</div>
+  <div id="yearlyGoals"></div>
+  <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap">
+    <input id="yearlyTitle" type="text" placeholder="Goal title (e.g. Emergency Fund)" class="form-input" style="flex:1; min-width:180px">
+    <input id="yearlyAmount" type="number" placeholder="Target amount (Rs.)" class="form-input" style="width:160px">
+    <button onclick="addGoal('yearly')" class="btn">+ Add Yearly Goal</button>
+  </div>
 </div>
 
-<div id="goals-container">
-  <p style="color:var(--muted);padding:20px;">Loading...</p>
+<div class="card">
+  <div class="card-title">📅 Monthly Goals (<span id="monthLabel"></span>)</div>
+  <div id="monthlyGoals"></div>
+  <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap">
+    <input id="monthlyTitle" type="text" placeholder="Goal title (e.g. Save for laptop)" class="form-input" style="flex:1; min-width:180px">
+    <input id="monthlyAmount" type="number" placeholder="Target amount (Rs.)" class="form-input" style="width:160px">
+    <button onclick="addGoal('monthly')" class="btn">+ Add Monthly Goal</button>
+  </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
 <script>
-fetch('/api/goals').then(r=>r.json()).then(goals => {
-  const el = document.getElementById('goals-container');
+const now = new Date();
+document.getElementById("yearLabel").textContent = now.getFullYear();
+document.getElementById("monthLabel").textContent = now.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  if (!goals || goals.length === 0) {
-    el.innerHTML = `
-      <div class="card" style="text-align:center;padding:48px;">
-        <p style="color:var(--muted);margin-bottom:12px;">No goals found.</p>
-        <p style="color:var(--muted);font-size:0.8rem;">Create a <code>Data/goals.json</code> file to track goals.</p>
-        <p style="color:var(--muted);font-size:0.75rem;margin-top:8px;">Example:<br><code>[{"name":"Laptop","target":50000,"current_savings":10000,"priority":"High"}]</code></p>
-      </div>`;
+function loadGoals() {
+  fetch("/api/goals")
+    .then(res => res.json())
+    .then(data => {
+      renderGoals("yearlyGoals", data.yearly);
+      renderGoals("monthlyGoals", data.monthly);
+    });
+}
+
+function renderGoals(containerId, goals) {
+  const container = document.getElementById(containerId);
+  if (!goals.length) {
+    container.innerHTML = '<div style="color:var(--muted); padding:12px 0">Koi goal nahi set kiya hai abhi.</div>';
     return;
   }
-
-  const priorityColor = { High:'#e05260', Medium:'#f5a623', Low:'#00d4aa' };
-
-  let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">';
+  let html = "";
   goals.forEach(g => {
-    const pct   = Math.min(100, g.pct || 0);
-    const pColor = priorityColor[g.priority] || '#7c6df0';
-    const rem   = (g.target - g.saved).toLocaleString('en-IN');
     html += `
-    <div class="card" style="border-top:3px solid ${pColor};">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid rgba(37,37,64,0.5)">
         <div>
-          <div style="font-weight:600;font-size:1rem;">${g.name}</div>
-          <div style="color:var(--muted);font-size:0.75rem;margin-top:2px;">${g.priority} Priority</div>
+          <div style="font-weight:600; color:var(--text)">${g.title}</div>
+          <div style="font-size:13px; color:var(--accent); font-family:'JetBrains Mono',monospace">Rs.${Number(g.target_amount).toLocaleString()}</div>
         </div>
-        <span style="background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:99px;padding:2px 10px;font-size:0.75rem;">${pct.toFixed(1)}%</span>
-      </div>
-      <div style="font-family:'Space Mono',monospace;font-size:1.2rem;color:${pColor};margin-bottom:6px;">
-        ₹${g.saved.toLocaleString('en-IN')}
-        <span style="color:var(--muted);font-size:0.8rem;"> / ₹${g.target.toLocaleString('en-IN')}</span>
-      </div>
-      <div style="background:var(--bg3);border-radius:99px;height:7px;overflow:hidden;margin:10px 0;">
-        <div style="height:100%;border-radius:99px;background:${pColor};width:${pct}%;transition:width 0.8s ease;"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--muted);">
-        <span>₹${rem} remaining</span>
-        <span>ETA: ${g.eta}</span>
-      </div>
-    </div>`;
+        <a href="javascript:void(0)" onclick="deleteGoal(${g.id})" style="color:var(--red); text-decoration:none; font-size:16px">🗑️</a>
+      </div>`;
   });
-  html += '</div>';
-  el.innerHTML = html;
-}).catch(() => {
-  document.getElementById('goals-container').innerHTML = '<div class="card"><p style="color:var(--danger);padding:20px;">Error loading goals.</p></div>';
-});
+  container.innerHTML = html;
+}
+
+function addGoal(type) {
+  const titleEl = document.getElementById(type === 'yearly' ? 'yearlyTitle' : 'monthlyTitle');
+  const amountEl = document.getElementById(type === 'yearly' ? 'yearlyAmount' : 'monthlyAmount');
+  const title = titleEl.value.trim();
+  const amount = amountEl.value;
+
+  if (!title || !amount) { alert("Title aur amount dono fill karo!"); return; }
+
+  fetch("/api/goals/add", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ goal_type: type, title: title, target_amount: amount })
+  }).then(() => {
+    titleEl.value = "";
+    amountEl.value = "";
+    loadGoals();
+  });
+}
+
+function deleteGoal(id) {
+  if (!confirm("Goal delete karna hai?")) return;
+  fetch(`/api/goals/delete/${id}`, { method: "POST" }).then(() => loadGoals());
+}
+
+loadGoals();
 </script>
 {% endblock %}

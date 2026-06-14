@@ -467,6 +467,57 @@ def api_history_month(month):
         })
     transactions.sort(key=lambda x: x["date"], reverse=True)
     return jsonify({"transactions": transactions})
+
+@app.route("/goals")
+@login_required
+def goals_page():
+    return render_template("goals.html")
+
+@app.route("/api/goals")
+@login_required
+def api_goals():
+    user = get_current_user()
+    current_year = str(datetime.now().year)
+    current_month = datetime.now().strftime("%Y-%m")
+
+    res = supabase.table("goals").select("*").eq("user_id", user).execute()
+    all_goals = res.data or []
+
+    yearly = [g for g in all_goals if g["goal_type"]=="yearly" and g["period"]==current_year]
+    monthly = [g for g in all_goals if g["goal_type"]=="monthly" and g["period"]==current_month]
+
+    return jsonify({"yearly": yearly, "monthly": monthly})
+
+@app.route("/api/goals/add", methods=["POST"])
+@login_required
+def api_goals_add():
+    user = get_current_user()
+    data = request.get_json()
+
+    goal_type = data.get("goal_type")
+    title = data.get("title")
+    target_amount = float(data.get("target_amount"))
+
+    if goal_type == "yearly":
+        period = str(datetime.now().year)
+    else:
+        period = data.get("period") or datetime.now().strftime("%Y-%m")
+
+    supabase.table("goals").insert({
+        "user_id": user,
+        "goal_type": goal_type,
+        "period": period,
+        "title": title,
+        "target_amount": target_amount
+    }).execute()
+
+    return jsonify({"success": True})
+
+@app.route("/api/goals/delete/<int:goal_id>", methods=["POST"])
+@login_required
+def api_goals_delete(goal_id):
+    supabase.table("goals").delete().eq("id", goal_id).eq("user_id", get_current_user()).execute()
+    return jsonify({"success": True})
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
