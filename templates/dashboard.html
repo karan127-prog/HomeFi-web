@@ -60,6 +60,16 @@
 <!-- RECENT TRANSACTIONS -->
 <div class="card">
   <div class="card-title">Recent Transactions</div>
+  <div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap">
+    <select id="filterCategory" class="form-select" style="width:auto; padding:6px 12px; font-size:13px">
+      <option value="">All Categories</option>
+    </select>
+    <select id="filterType" class="form-select" style="width:auto; padding:6px 12px; font-size:13px">
+      <option value="">All Types</option>
+      <option value="income">Income</option>
+      <option value="expense">Expense</option>
+    </select>
+  </div>
   <table class="data-table">
     <thead>
       <tr>
@@ -82,7 +92,7 @@
       </tr>
       {% endif %}
       {% for row in recent %}
-      <tr>
+      <tr data-category="{{ row.category }}" data-type="{{ row.type }}">
         <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">{{ row.date }}</td>
         <td><span class="badge badge-blue">{{ row.category }}</span></td>
         <td style="color:var(--muted)">{{ row.description }}</td>
@@ -183,5 +193,27 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+// Populate category filter dynamically
+const categorySet = new Set();
+document.querySelectorAll("tbody tr[data-category]").forEach(tr => categorySet.add(tr.dataset.category));
+const catFilter = document.getElementById("filterCategory");
+categorySet.forEach(cat => {
+  const opt = document.createElement("option");
+  opt.value = cat; opt.textContent = cat;
+  catFilter.appendChild(opt);
+});
+
+// Filter logic
+function applyFilters() {
+  const cat = document.getElementById("filterCategory").value;
+  const type = document.getElementById("filterType").value;
+  document.querySelectorAll("tbody tr[data-category]").forEach(tr => {
+    const matchCat  = !cat  || tr.dataset.category === cat;
+    const matchType = !type || tr.dataset.type === type;
+    tr.style.display = (matchCat && matchType) ? "" : "none";
+  });
+}
+document.getElementById("filterCategory").addEventListener("change", applyFilters);
+document.getElementById("filterType").addEventListener("change", applyFilters);
 </script>
 {% endblock %}

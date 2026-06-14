@@ -445,6 +445,28 @@ def api_history():
     
     months_data.sort(key=lambda x: x["month"], reverse=True)
     return jsonify({"months": months_data})
+
+@app.route("/api/history/<month>")
+@login_required
+def api_history_month(month):
+    df = get_df()
+    if df.empty:
+        return jsonify({"transactions": []})
+    
+    df = add_month_col(df)
+    month_df = df[df["month"].astype(str) == month]
+    
+    transactions = []
+    for _, row in month_df.iterrows():
+        transactions.append({
+            "date": row["date"].strftime("%Y-%m-%d"),
+            "category": row["category"],
+            "type": row["type"],
+            "amount": float(row["amount"]),
+            "description": row.get("description", "")
+        })
+    transactions.sort(key=lambda x: x["date"], reverse=True)
+    return jsonify({"transactions": transactions})
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
