@@ -377,6 +377,528 @@ def download_excel():
                      download_name=f'HomeFi_{get_current_user()}.xlsx')
 
 
+@app.route("/download-pdf")
+@login_required
+def download_pdf():
+    df = get_df()
+    if df.empty:
+        flash("Koi data nahi hai export karne ke liye!")
+        return redirect(url_for("dashboard"))
+
+    from flask import send_file
+    import io
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.units import inch
+    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
+                                     Spacer, Image, PageBreak, HRFlowable)
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+
+    GREEN = colors.HexColor('#2e7d32')
+    RED = colors.HexColor('#c62828')
+    BLUE = colors.HexColor('#1565c0')
+    PURPLE = colors.HexColor('#6a1b9a')
+    DARK = colors.HexColor('#1a1a2e')
+    ACCENT = colors.HexColor('#4fc3f7')
+
+    # ---------- Core numbers (all-time) ----------
+    df_all = df.copy()
+    total_income = float(df_all[df_all["type"]=="income"]["amount"].sum())
+    total_expense = float(df_all[df_all["type"]=="expense"]["amount"].sum())
+    net_savings = total_income - total_expense
+    savings_rate = (net_savings/total_income*100) if total_income > 0 else 0
+
+    df_m = add_month_col(df_all.copy())
+    monthly = df_m.groupby(["month","type"])["amount"].sum().unstack(fill_value=0)
+    months_sorted = sorted(monthly.index.astype(str))
+    cur_month = months_sorted[-1]
+    prev_month = months_sorted[-2] if len(months_sorted) > 1 else None
+
+    def month_vals(m):
+        if m is None:
+            return 0.0, 0.0
+        row = monthly.loc[monthly.index.astype(str) == m]
+        inc = float(row["income"].values[0]) if "income" in row.columns and len(row) else 0.0
+        exp = float(row["expense"].values[0]) if "expense" in row.columns and len(row) else 0.0
+        return inc, exp
+
+    cur_inc, cur_exp = month_vals(cur_month)
+    prev_inc, prev_exp = month_vals(prev_month)
+    cur_savings = cur_inc - cur_exp
+    prev_savings = prev_inc - prev_exp
+    exp_change = ((cur_exp - prev_exp)/prev_exp*100) if prev_exp > 0 else 0
+    inc_change = ((cur_inc - prev_inc)/prev_inc*100) if prev_inc > 0 else 0
+    sav_change = ((cur_savings - prev_savings)/abs(prev_savings)*100) if prev_savings != 0 else 0
+
+    # ---------- Forecast (linear trend) ----------
+    all_inc = [month_vals(m)[0] for m in months_sorted]
+    all_exp = [month_vals(m)[1] for m in months_sorted]
+    all_sav = [i-e for i,e in zip(all_inc, all_exp)]
+
+    if len(all_sav) >= 2:
+        x = np.arange(len(all_sav))
+        slope, intercept = np.polyfit(x, all_sav, 1)
+    else:
+        slope, intercept = 0, all_sav[0] if all_sav else 0
+
+    forecast_months = 3
+    forecast_labels = []
+    forecast_values = []
+    last_period = pd.Period(months_sorted[-1])
+    for i in range(1, forecast_months+1):
+        fperiod = last_period + i
+        forecast_labels.append(str(fperiod))
+        fval = slope*(len(all_sav)-1+i) + intercept
+        forecast_values.append(max(fval, 0))
+
+    avg_monthly_savings = float(np.mean(all_sav)) if all_sav else 0
+
+    # ---------- Goals ----------
+    goals_res = supabase.table("goals").select("*").eq("user_id", get_current_user()).execute()
+    all_goals_data = goals_res.data or []
+    current_year_str = str(datetime.now().year)
+    current_month_str = datetime.now().strftime("%Y-%m")
+    yearly_goals = [g for g in all_goals_data if g["goal_type"]=="yearly" and g["period"]==current_year_str]
+    monthly_goals = [g for g in all_goals_data if g["goal_type"]=="monthly" and g["period"]==current_month_str]
+
+    df_year_filtered = df_m[df_m["month"].astype(str).str.startswith(current_year_str)]
+    year_income = float(df_year_filtered[df_year_filtered["type"]=="income"]["amount"].sum())
+    year_expense = float(df_year_filtered[df_year_filtered["type"]=="expense"]["amount"].sum())
+    year_savings = year_income - year_expense
+
+    # ---------- Category breakdown ----------
+    cat_data = df_all[df_all["type"]=="expense"].groupby("category")["amount"].sum().sort_values(ascending=False)
+    cur_cat = df_m[(df_m["type"]=="expense") & (df_m["month"].astype(str)==cur_month)].groupby("category")["amount"].sum().sort_values(ascending=False)
+    prev_cat = df_m[(df_m["type"]=="expense") & (df_m["month"].astype(str)==prev_month)].groupby("category")["amount"].sum() if prev_month else pd.Series(dtype=float)
+
+    # ---------- PDF setup ----------
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=letter,
+                             topMargin=0.45*inch, bottomMargin=0.45*inch,
+                             leftMargin=0.5*inch, rightMargin=0.5*inch)
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Title'],
+                                  textColor=DARK, fontSize=21, spaceAfter=2)
+    sub_style = ParagraphStyle('SubStyle', parent=styles['Normal'],
+                                textColor=colors.HexColor('#777777'), fontSize=9)
+    heading_style = ParagraphStyle('HeadStyle', parent=styles['Heading2'],
+                                    textColor=DARK, fontSize=13.5, spaceBefore=14, spaceAfter=6)
+    subheading_style = ParagraphStyle('SubHeadStyle', parent=styles['Heading3'],
+                                       textColor=colors.HexColor('#333355'), fontSize=11, spaceBefore=8, spaceAfter=4)
+    body_style = ParagraphStyle('BodyStyle', parent=styles['Normal'], fontSize=9.5, leading=14)
+    tip_style = ParagraphStyle('TipStyle', parent=styles['Normal'], fontSize=9.5, leading=15, leftIndent=4)
+
+    elements = []
+
+    # ---------------- HEADER ----------------
+    elements.append(Paragraph("HomeFi — Complete Financial Analysis Report", title_style))
+    elements.append(Paragraph(
+        f"User: {get_current_user()} &nbsp;|&nbsp; Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')} "
+        f"&nbsp;|&nbsp; Period covered: {months_sorted[0]} to {months_sorted[-1]} "
+        f"({len(months_sorted)} months)",
+        sub_style))
+    elements.append(Spacer(1, 10))
+    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#dddddd')))
+    elements.append(Spacer(1, 10))
+
+    # ---------------- OVERALL SUMMARY ----------------
+    elements.append(Paragraph("1. Overall Summary (All Months)", heading_style))
+    summary_data = [
+        ["Total Income", "Total Expense", "Net Savings (Fayda)", "Savings Rate"],
+        [f"Rs.{total_income:,.0f}", f"Rs.{total_expense:,.0f}",
+         f"Rs.{net_savings:,.0f}" if net_savings >= 0 else f"-Rs.{abs(net_savings):,.0f}",
+         f"{savings_rate:.1f}%"]
+    ]
+    summary_table = Table(summary_data, colWidths=[1.7*inch]*4)
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), DARK),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTSIZE', (0,1), (-1,1), 14),
+        ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0,1), (0,1), GREEN),
+        ('TEXTCOLOR', (1,1), (1,1), RED),
+        ('TEXTCOLOR', (2,1), (2,1), GREEN if net_savings >= 0 else RED),
+        ('TEXTCOLOR', (3,1), (3,1), PURPLE),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+    ]))
+    elements.append(summary_table)
+    elements.append(Spacer(1, 6))
+    elements.append(Paragraph(
+        f"<b>Fayda/Nuksaan status:</b> "
+        + (f"Overall aapko <font color='#2e7d32'><b>Rs.{net_savings:,.0f} ka fayda</b></font> hua hai "
+           f"in {len(months_sorted)} mahino mein."
+           if net_savings >= 0 else
+           f"Overall aapko <font color='#c62828'><b>Rs.{abs(net_savings):,.0f} ka nuksaan</b></font> hua hai "
+           f"in {len(months_sorted)} mahino mein."),
+        body_style))
+    elements.append(Spacer(1, 10))
+
+    # ---------------- MONTH-BY-MONTH ----------------
+    elements.append(Paragraph("2. Month-by-Month Breakdown", heading_style))
+    mb_data = [["Month", "Income", "Expense", "Savings (Fayda/Nuksaan)", "Status"]]
+    for m in months_sorted:
+        inc, exp = month_vals(m)
+        sav = inc - exp
+        status = "Fayda" if sav >= 0 else "Nuksaan"
+        mb_data.append([m, f"Rs.{inc:,.0f}", f"Rs.{exp:,.0f}",
+                         f"Rs.{sav:,.0f}" if sav >= 0 else f"-Rs.{abs(sav):,.0f}", status])
+
+    mb_table = Table(mb_data, colWidths=[1.1*inch, 1.4*inch, 1.4*inch, 1.7*inch, 1*inch])
+    mb_style = [
+        ('BACKGROUND', (0,0), (-1,0), ACCENT),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('FONTSIZE', (0,0), (-1,-1), 9.5),
+    ]
+    for i, m in enumerate(months_sorted, start=1):
+        inc, exp = month_vals(m)
+        sav = inc - exp
+        color = GREEN if sav >= 0 else RED
+        mb_style.append(('TEXTCOLOR', (3,i), (4,i), color))
+        mb_style.append(('FONTNAME', (3,i), (4,i), 'Helvetica-Bold'))
+        bg = colors.HexColor('#f5f5f5') if i % 2 == 0 else colors.white
+        mb_style.append(('BACKGROUND', (0,i), (2,i), bg))
+    mb_table.setStyle(TableStyle(mb_style))
+    elements.append(mb_table)
+    elements.append(Spacer(1, 10))
+
+    # ---------------- MONTHLY TREND CHART ----------------
+    elements.append(Paragraph("3. Monthly Trend — Income vs Expense vs Savings", heading_style))
+    fig, ax = plt.subplots(figsize=(6.6, 2.9))
+    ax.plot(months_sorted, all_inc, marker='o', label='Income', color='#2e7d32', linewidth=2)
+    ax.plot(months_sorted, all_exp, marker='o', label='Expense', color='#c62828', linewidth=2)
+    ax.plot(months_sorted, all_sav, marker='o', label='Savings', color='#1565c0', linewidth=2, linestyle='--')
+    ax.axhline(0, color='#999999', linewidth=0.8)
+    ax.legend(fontsize=8)
+    ax.tick_params(labelsize=8)
+    ax.set_ylabel("Rs.", fontsize=8)
+    for spine in ['top','right']:
+        ax.spines[spine].set_visible(False)
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=130)
+    plt.close(fig)
+    buf.seek(0)
+    elements.append(Image(buf, width=6.6*inch, height=2.9*inch))
+    elements.append(Spacer(1, 10))
+
+    # ---------------- CATEGORY BREAKDOWN ----------------
+    if not cat_data.empty:
+        elements.append(Paragraph("4. Category-wise Spending (Overall)", heading_style))
+        fig, ax = plt.subplots(figsize=(6.6, 2.9))
+        palette = ['#4fc3f7','#69f0ae','#ff5370','#ffd740','#b388ff','#ff8a65','#80cbc4','#f48fb1']
+        ax.barh(cat_data.index[::-1], cat_data.values[::-1], color=palette[:len(cat_data)][::-1])
+        ax.set_xlabel("Amount (Rs.)", fontsize=8)
+        ax.tick_params(labelsize=8)
+        for spine in ['top','right']:
+            ax.spines[spine].set_visible(False)
+        plt.tight_layout()
+        buf2 = io.BytesIO()
+        plt.savefig(buf2, format='png', dpi=130)
+        plt.close(fig)
+        buf2.seek(0)
+        elements.append(Image(buf2, width=6.6*inch, height=2.9*inch))
+        elements.append(Spacer(1, 4))
+
+        cat_table_data = [["Category", "Total Spent", "% of Expenses"]]
+        for cat, amt in cat_data.items():
+            pct = amt/total_expense*100
+            cat_table_data.append([cat, f"Rs.{amt:,.0f}", f"{pct:.1f}%"])
+        cat_table = Table(cat_table_data, colWidths=[2.5*inch, 2*inch, 2*inch])
+        cat_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), DARK),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+            ('FONTSIZE', (0,0), (-1,-1), 9.5),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ]))
+        elements.append(cat_table)
+
+    elements.append(PageBreak())
+
+    # ---------------- MONTH-OVER-MONTH COMPARISON ----------------
+    if prev_month:
+        elements.append(Paragraph("5. Month-over-Month Comparison", heading_style))
+        elements.append(Paragraph(
+            f"<b>{prev_month}</b> vs <b>{cur_month}</b> ka comparison.", body_style))
+        elements.append(Spacer(1, 6))
+
+        comp_data = [
+            ["Metric", prev_month, cur_month, "Change", "Fayda/Nuksaan"],
+            ["Income", f"Rs.{prev_inc:,.0f}", f"Rs.{cur_inc:,.0f}",
+             f"{'+' if inc_change>=0 else ''}{inc_change:.1f}%",
+             "Fayda" if inc_change >= 0 else "Nuksaan"],
+            ["Expense", f"Rs.{prev_exp:,.0f}", f"Rs.{cur_exp:,.0f}",
+             f"{'+' if exp_change>=0 else ''}{exp_change:.1f}%",
+             "Nuksaan" if exp_change > 0 else "Fayda"],
+            ["Savings", f"Rs.{prev_savings:,.0f}", f"Rs.{cur_savings:,.0f}",
+             f"{'+' if sav_change>=0 else ''}{sav_change:.1f}%",
+             "Fayda" if sav_change >= 0 else "Nuksaan"],
+        ]
+        comp_table = Table(comp_data, colWidths=[1.3*inch, 1.4*inch, 1.4*inch, 1.1*inch, 1.2*inch])
+        comp_style = [
+            ('BACKGROUND', (0,0), (-1,0), ACCENT),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+            ('FONTSIZE', (0,0), (-1,-1), 9.5),
+        ]
+        for i, row in enumerate(comp_data[1:], start=1):
+            color = GREEN if row[4] == "Fayda" else RED
+            comp_style.append(('TEXTCOLOR', (3,i), (4,i), color))
+            comp_style.append(('FONTNAME', (3,i), (4,i), 'Helvetica-Bold'))
+        comp_table.setStyle(TableStyle(comp_style))
+        elements.append(comp_table)
+        elements.append(Spacer(1, 8))
+
+        # Category-wise comparison
+        elements.append(Paragraph("Category-wise change (vs previous month)", subheading_style))
+        all_cats = sorted(set(cur_cat.index) | set(prev_cat.index))
+        cc_data = [["Category", prev_month, cur_month, "Change"]]
+        for c in all_cats:
+            pv = float(prev_cat.get(c, 0))
+            cv = float(cur_cat.get(c, 0))
+            if pv > 0:
+                chg = (cv-pv)/pv*100
+                chg_str = f"{'+' if chg>=0 else ''}{chg:.0f}%"
+            elif cv > 0:
+                chg_str = "New"
+            else:
+                chg_str = "-"
+            cc_data.append([c, f"Rs.{pv:,.0f}", f"Rs.{cv:,.0f}", chg_str])
+        cc_table = Table(cc_data, colWidths=[2*inch, 1.6*inch, 1.6*inch, 1.2*inch])
+        cc_style = [
+            ('BACKGROUND', (0,0), (-1,0), DARK),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+            ('FONTSIZE', (0,0), (-1,-1), 9.5),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ]
+        for i, row in enumerate(cc_data[1:], start=1):
+            if row[3].startswith('+'):
+                cc_style.append(('TEXTCOLOR', (3,i), (3,i), RED))
+            elif row[3].startswith('-') and row[3] != "-":
+                cc_style.append(('TEXTCOLOR', (3,i), (3,i), GREEN))
+        cc_table.setStyle(TableStyle(cc_style))
+        elements.append(cc_table)
+        elements.append(Spacer(1, 12))
+
+    # ---------------- SAVINGS GOALS ----------------
+    if yearly_goals or monthly_goals:
+        elements.append(Paragraph("6. Savings Goals", heading_style))
+
+        if yearly_goals:
+            elements.append(Paragraph(f"Yearly Goals ({current_year_str})", subheading_style))
+            goal_data = [["Goal", "Target", "Saved (Year)", "Remaining", "Progress"]]
+            for g in yearly_goals:
+                target = float(g["target_amount"])
+                remaining = max(target - year_savings, 0)
+                progress = min((year_savings/target*100), 100) if target > 0 else 0
+                goal_data.append([
+                    g["title"], f"Rs.{target:,.0f}",
+                    f"Rs.{year_savings:,.0f}" if year_savings >= 0 else f"-Rs.{abs(year_savings):,.0f}",
+                    f"Rs.{remaining:,.0f}", f"{progress:.1f}%"
+                ])
+            goal_table = Table(goal_data, colWidths=[1.6*inch, 1.1*inch, 1.2*inch, 1.2*inch, 0.9*inch])
+            goal_table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), PURPLE),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('TOPPADDING', (0,0), (-1,-1), 5),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ]))
+            elements.append(goal_table)
+            elements.append(Spacer(1, 8))
+
+        if monthly_goals:
+            elements.append(Paragraph(f"Monthly Goals ({current_month_str})", subheading_style))
+            goal_data = [["Goal", "Target", "Saved (Month)", "Remaining", "Progress"]]
+            for g in monthly_goals:
+                target = float(g["target_amount"])
+                remaining = max(target - net_savings, 0)
+                progress = min((net_savings/target*100), 100) if target > 0 else 0
+                goal_data.append([
+                    g["title"], f"Rs.{target:,.0f}",
+                    f"Rs.{net_savings:,.0f}" if net_savings >= 0 else f"-Rs.{abs(net_savings):,.0f}",
+                    f"Rs.{remaining:,.0f}", f"{progress:.1f}%"
+                ])
+            goal_table = Table(goal_data, colWidths=[1.6*inch, 1.1*inch, 1.2*inch, 1.2*inch, 0.9*inch])
+            goal_table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), ACCENT),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('TOPPADDING', (0,0), (-1,-1), 5),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ]))
+            elements.append(goal_table)
+            elements.append(Spacer(1, 8))
+
+    # ---------------- FORECAST ----------------
+    elements.append(Paragraph("7. Forecast — Next 3 Months", heading_style))
+    elements.append(Paragraph(
+        "Pichle mahino ke trend ke aadhar par (simple linear projection), agle 3 mahino "
+        "ki estimated savings:", body_style))
+    elements.append(Spacer(1, 4))
+
+    fig, ax = plt.subplots(figsize=(6.6, 2.9))
+    ax.plot(months_sorted, all_sav, marker='o', label='Actual Savings', color='#1565c0', linewidth=2)
+    combined_labels = months_sorted + forecast_labels
+    combined_values = all_sav + forecast_values
+    ax.plot(combined_labels[len(months_sorted)-1:], combined_values[len(months_sorted)-1:],
+            marker='o', label='Forecast', color='#ff8a65', linewidth=2, linestyle='--')
+    ax.axhline(0, color='#999999', linewidth=0.8)
+    ax.legend(fontsize=8)
+    ax.tick_params(labelsize=8, rotation=20)
+    ax.set_ylabel("Savings (Rs.)", fontsize=8)
+    for spine in ['top','right']:
+        ax.spines[spine].set_visible(False)
+    plt.tight_layout()
+    buf4 = io.BytesIO()
+    plt.savefig(buf4, format='png', dpi=130)
+    plt.close(fig)
+    buf4.seek(0)
+    elements.append(Image(buf4, width=6.6*inch, height=2.9*inch))
+    elements.append(Spacer(1, 4))
+
+    fc_data = [["Month", "Projected Savings"]]
+    for lbl, val in zip(forecast_labels, forecast_values):
+        fc_data.append([lbl, f"Rs.{val:,.0f}"])
+    fc_table = Table(fc_data, colWidths=[2.5*inch, 2.5*inch])
+    fc_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), ACCENT),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+        ('FONTSIZE', (0,0), (-1,-1), 9.5),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('TEXTCOLOR', (1,1), (1,-1), BLUE),
+        ('FONTNAME', (1,1), (1,-1), 'Helvetica-Bold'),
+    ]))
+    elements.append(fc_table)
+    elements.append(Spacer(1, 4))
+    elements.append(Paragraph(
+        "<i>Note: Forecast ek simple trend-based estimate hai, actual results income/expenses "
+        "mein real changes ke saath vary kar sakte hain.</i>", sub_style))
+    elements.append(PageBreak())
+
+    # ---------------- TIPS ----------------
+    elements.append(Paragraph("8. Key Insights & Tips", heading_style))
+
+    tips = []
+    if not cat_data.empty:
+        top_cat = cat_data.index[0]
+        top_pct = cat_data.iloc[0]/total_expense*100
+        tips.append(f"<b>Sabse zyada spending category:</b> '{top_cat}' — Rs.{cat_data.iloc[0]:,.0f} "
+                    f"({top_pct:.1f}% of total expenses). Yahan budget set karne se savings improve "
+                    f"ho sakti hai.")
+
+    if prev_month:
+        if exp_change > 0:
+            tips.append(f"<b>Expense trend:</b> Pichle mahine ({prev_month}) ke comparison mein expenses "
+                        f"<font color='#c62828'>{exp_change:.1f}% badhe</font> hain.")
+        else:
+            tips.append(f"<b>Expense trend:</b> Pichle mahine ({prev_month}) ke comparison mein expenses "
+                        f"<font color='#2e7d32'>{abs(exp_change):.1f}% kam</font> hue hain — accha sign hai.")
+
+    if savings_rate >= 20:
+        tips.append(f"<b>Savings Rate:</b> {savings_rate:.1f}% — bahut healthy hai (recommended: 20%+).")
+    elif savings_rate >= 0:
+        tips.append(f"<b>Savings Rate:</b> {savings_rate:.1f}% — target rakho 20% ka, discretionary "
+                    f"expenses mein 10-15% cut karne se ye possible hai.")
+    else:
+        tips.append(f"<b>Savings Rate:</b> {savings_rate:.1f}% — expenses income se zyada hain. "
+                    f"Urgent action chahiye: non-essential categories mein cut karo.")
+
+    if prev_month:
+        all_cats2 = sorted(set(cur_cat.index) | set(prev_cat.index))
+        increases = []
+        for c in all_cats2:
+            pv = float(prev_cat.get(c, 0))
+            cv = float(cur_cat.get(c, 0))
+            if pv > 0 and cv > pv:
+                increases.append((c, cv-pv, (cv-pv)/pv*100))
+        if increases:
+            increases.sort(key=lambda x: x[1], reverse=True)
+            big_c, big_amt, big_pct = increases[0]
+            tips.append(f"<b>Biggest jump:</b> '{big_c}' category mein expense Rs.{big_amt:,.0f} "
+                        f"({big_pct:.0f}%) badha hai pichle mahine se.")
+
+    tips.append("<b>General tip:</b> Har mahine budget set karo har category ke liye, aur regularly "
+                "transactions add karte raho — isse trends aur forecast zyada accurate honge.")
+
+    for t in tips:
+        elements.append(Paragraph(f"• {t}", tip_style))
+        elements.append(Spacer(1, 3))
+    elements.append(Spacer(1, 12))
+
+    # ---------------- FULL TRANSACTION HISTORY ----------------
+    elements.append(Paragraph("9. Full Transaction History", heading_style))
+    df_sorted = df_all.sort_values('date', ascending=False)
+    table_data = [["Date", "Month", "Category", "Type", "Amount (Rs.)", "Description"]]
+    for _, row in df_sorted.iterrows():
+        table_data.append([
+            row['date'].strftime('%Y-%m-%d'), str(row['date'].to_period('M')), row['category'],
+            row['type'].capitalize(), f"{row['amount']:,.0f}", str(row.get('description',''))[:30]
+        ])
+
+    trans_table = Table(table_data,
+                         colWidths=[0.85*inch, 0.7*inch, 1.05*inch, 0.75*inch, 0.95*inch, 1.7*inch],
+                         repeatRows=1)
+    style_cmds = [
+        ('BACKGROUND', (0,0), (-1,0), DARK),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 8.5),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#dddddd')),
+        ('ALIGN', (4,0), (4,-1), 'RIGHT'),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]
+    for i, row in enumerate(table_data[1:], start=1):
+        bg = colors.HexColor('#f5f5f5') if i % 2 == 0 else colors.white
+        style_cmds.append(('BACKGROUND', (0,i), (-1,i), bg))
+        color = GREEN if row[3] == 'Income' else RED
+        style_cmds.append(('TEXTCOLOR', (4,i), (4,i), color))
+        style_cmds.append(('FONTNAME', (4,i), (4,i), 'Helvetica-Bold'))
+
+    trans_table.setStyle(TableStyle(style_cmds))
+    elements.append(trans_table)
+
+    doc.build(elements)
+    output.seek(0)
+    return send_file(output, mimetype='application/pdf', as_attachment=True,
+                     download_name=f'HomeFi_Report_{get_current_user()}.pdf')
+
 @app.route("/delete-transaction/<int:transaction_id>")
 @login_required
 def delete_transaction(transaction_id):
